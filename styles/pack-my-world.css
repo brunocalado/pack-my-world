@@ -23,17 +23,57 @@
   border-bottom: 1px solid var(--color-border-dark, #444);
 }
 
+/* Toolbar: summary + Copy Files button side by side */
+.pmw-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 12px;
+}
+
 .pmw-summary {
   font-size: 0.8rem;
   color: var(--color-text-light-6, #aaa);
-  margin-bottom: 6px;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
-.pmw-external-count  { color: #e8a020; }
-.pmw-wildcard-count  { color: #a070e0; }
+.pmw-external-count { color: #e8a020; }
+.pmw-wildcard-count { color: #a070e0; }
+.pmw-copy-ok        { color: #5cb85c; }
+.pmw-copy-err       { color: #e05050; }
 .pmw-sep { opacity: 0.4; }
+
+/* Copy Files button */
+.pmw-action-btn {
+  all: unset;
+  cursor: pointer;
+  padding: 5px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 4px;
+  background: #1a4a1a;
+  color: #7acf7a;
+  border: 1px solid #2a6a2a;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.pmw-action-btn:hover {
+  background: #1e5e1e;
+  color: #a0eaa0;
+}
+.pmw-action-btn--disabled {
+  background: #2a2a2a;
+  color: #666;
+  border-color: #444;
+  cursor: not-allowed;
+}
 
 /* ── Primary tabs ───────────────────────────────────────────────── */
 .pmw-tabs {
@@ -154,8 +194,8 @@
 
 .pmw-row { border-bottom: 1px solid #2a2a2a; }
 .pmw-row:hover { background: rgba(255,255,255,0.03); }
-.pmw-row.pmw-external  { background: rgba(232,160,32,0.05); }
-.pmw-row.pmw-wildcard  { background: rgba(160,112,224,0.05); }
+.pmw-row.pmw-external { background: rgba(232,160,32,0.05); }
+.pmw-row.pmw-wildcard { background: rgba(160,112,224,0.05); }
 
 .pmw-table td { padding: 5px 8px; vertical-align: middle; }
 
@@ -204,6 +244,7 @@
   cursor: help;
 }
 
+/* ── Status tags ─────────────────────────────────────────────────── */
 .pmw-tag {
   font-size: 0.68rem;
   font-weight: 700;
@@ -211,5 +252,7 @@
   border-radius: 4px;
   white-space: nowrap;
 }
-.pmw-tag--ok   { background: #0d2e0d; color: #5cb85c; }
-.pmw-tag--warn { background: #2e1e00; color: #e8a020; }
+.pmw-tag--ok     { background: #0d2e0d; color: #5cb85c; }
+.pmw-tag--warn   { background: #2e1e00; color: #e8a020; }
+.pmw-tag--copied { background: #0d2e0d; color: #a0ffa0; border: 1px solid #2a6a2a; }
+.pmw-tag--error  { background: #2e0d0d; color: #ff8080; }

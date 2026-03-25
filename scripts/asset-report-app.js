@@ -2,6 +2,8 @@
  * @import { AssetEntry } from './asset-scanner.js'
  */
 
+import { AssetCopier } from './asset-copier.js';
+
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 const SCENE_SUB_FILTERS = [
@@ -37,6 +39,13 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._activeTab = 'scene';
     this._sceneSubFilter = 'all';
     this._compendiumSubFilter = 'all';
+    /**
+     * Tracks copy result per originalPath after Phase 2 runs.
+     * @type {Map<string, 'success'|'error'|'skip'>}
+     */
+    this._copyResults = new Map();
+    /** @type {boolean} True while copy is running — disables the Copy Files button. */
+    this._copying = false;
   }
 
   /** @override */
@@ -77,17 +86,31 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (this._activeTab === 'compendium' && this._compendiumSubFilter !== 'all')
       visibleAssets = visibleAssets.filter(a => a.documentSubType === this._compendiumSubFilter);
 
+    // Annotate each visible asset with its copy result if Phase 2 has run.
+    const annotated = visibleAssets.map(a => ({
+      ...a,
+      copyStatus: this._copyResults.get(a.originalPath) ?? null
+    }));
+
+    const copyDone = this._copyResults.size > 0;
+    const copySuccessCount = [...this._copyResults.values()].filter(v => v === 'success').length;
+    const copyErrorCount  = [...this._copyResults.values()].filter(v => v === 'error').length;
+
     return {
       tabs,
       activeTab: this._activeTab,
-      visibleAssets,
+      visibleAssets: annotated,
       totalFound: this._assets.length,
       totalExternal: this._assets.filter(a => a.isExternal).length,
       totalWildcard: this._assets.filter(a => a.isWildcard).length,
       showSceneSubFilters: this._activeTab === 'scene',
       sceneSubFilters,
       showCompendiumSubFilters: this._activeTab === 'compendium',
-      compendiumSubFilters
+      compendiumSubFilters,
+      copying: this._copying,
+      copyDone,
+      copySuccessCount,
+      copyErrorCount
     };
   }
 
@@ -110,5 +133,53 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         this.render();
       });
     });
+
+    const copyBtn = this.element.querySelector('#pmw-copy-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => this._onCopyFiles());
+    }
+  }
+
+  /**
+   * Triggered by the Copy Files button.
+   * Shows a confirmation dialog warning about duration, then starts the copy.
+   * Triggered by user action in _onRender.
+   * @returns {Promise<void>}
+   */
+  async _onCopyFiles() {
+    if (this._copying) return;
+
+    // Native V13 dialog for confirmation.
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: 'Pack My World — Copy Files' },
+      content: `
+        <p>This will copy <strong>${this._assets.filter(a => !a.isAlreadyInWorld).length} files</strong>
+        into <code>worlds/${game.world.id}/my-assets/</code>.</p>
+        <p>This process can take a long time depending on the number and size of assets.
+        Do not close Foundry while it is running.</p>
+        <p><strong>Document paths will NOT be updated in this step.</strong></p>
+      `,
+      yes: { label: 'Start Copying', icon: 'fa-solid fa-copy' },
+      no:  { label: 'Cancel' }
+    });
+
+    if (!confirmed) return;
+
+    this._copying = true;
+    this._copyResults.clear();
+    await this.render();
+
+    await AssetCopier.copyAll(this._assets, (originalPath, status) => {
+      this._copyResults.set(originalPath, status);
+    });
+
+    this._copying = false;
+    await this.render();
+
+    const successCount = [...this._copyResults.values()].filter(v => v === 'success').length;
+    const errorCount   = [...this._copyResults.values()].filter(v => v === 'error').length;
+    ui.notifications.info(
+      `Pack My World: Copy complete. ${successCount} copied, ${errorCount} failed.`
+    );
   }
 }

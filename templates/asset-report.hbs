@@ -1,11 +1,28 @@
 <div class="pmw-container">
   <div class="pmw-header">
-    <div class="pmw-summary">
-      <span>Assets found outside world folder: <strong>{{totalFound}}</strong></span>
-      <span class="pmw-sep">|</span>
-      <span class="pmw-external-count">External URLs (http/https): <strong>{{totalExternal}}</strong></span>
-      <span class="pmw-sep">|</span>
-      <span class="pmw-wildcard-count">Wildcards resolved: <strong>{{totalWildcard}}</strong></span>
+    <div class="pmw-toolbar">
+      <div class="pmw-summary">
+        <span>Assets outside world folder: <strong>{{totalFound}}</strong></span>
+        <span class="pmw-sep">|</span>
+        <span class="pmw-external-count">External URLs: <strong>{{totalExternal}}</strong></span>
+        <span class="pmw-sep">|</span>
+        <span class="pmw-wildcard-count">Wildcards resolved: <strong>{{totalWildcard}}</strong></span>
+        {{#if copyDone}}
+        <span class="pmw-sep">|</span>
+        <span class="pmw-copy-ok">Copied: <strong>{{copySuccessCount}}</strong></span>
+        {{#if copyErrorCount}}
+        <span class="pmw-sep">|</span>
+        <span class="pmw-copy-err">Failed: <strong>{{copyErrorCount}}</strong></span>
+        {{/if}}
+        {{/if}}
+      </div>
+      <button id="pmw-copy-btn" class="pmw-action-btn {{#if copying}}pmw-action-btn--disabled{{/if}}" {{#if copying}}disabled{{/if}}>
+        {{#if copying}}
+          <i class="fa-solid fa-spinner fa-spin"></i> Copying…
+        {{else}}
+          <i class="fa-solid fa-copy"></i> Copy Files
+        {{/if}}
+      </button>
     </div>
 
     <div class="pmw-tabs">
@@ -60,10 +77,18 @@
           </td>
           <td class="pmw-path pmw-path--proposed" title="{{proposedPath}}">{{proposedPath}}</td>
           <td class="pmw-status">
-            {{#if isExternal}}
-              <span class="pmw-tag pmw-tag--warn" title="Will attempt fetch; may fail if CORS is blocked">⚠ External URL</span>
+            {{#if copyStatus}}
+              {{#if (eq copyStatus 'success')}}
+                <span class="pmw-tag pmw-tag--copied">&#x2713; Copied</span>
+              {{else}}
+                <span class="pmw-tag pmw-tag--error">&#x2717; Failed</span>
+              {{/if}}
             {{else}}
-              <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
+              {{#if isExternal}}
+                <span class="pmw-tag pmw-tag--warn" title="Will attempt fetch; may fail if CORS is blocked">⚠ External URL</span>
+              {{else}}
+                <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
+              {{/if}}
             {{/if}}
           </td>
         </tr>
