@@ -30,6 +30,9 @@ const OPENABLE_TYPES = new Set(['scene', 'actor', 'item', 'journal', 'macro', 't
 const MAX_CANDIDATES = 5;
 const TOKEN_THRESHOLD = 0.5;
 
+/** Setting key used to persist the deny list across sessions. */
+const DENY_LIST_SETTING = 'pathDenyList';
+
 /**
  * Splits a filename stem into lowercase tokens.
  * Handles kebab-case, snake_case, dot.case, spaces, and camelCase.
@@ -71,6 +74,17 @@ function getStatusKey(a) {
   return 'copyable';
 }
 
+/**
+ * Returns true if the given path matches any deny-list prefix.
+ * @param {string} path
+ * @param {string[]} prefixes
+ * @returns {boolean}
+ */
+function isDenied(path, prefixes) {
+  if (!prefixes.length) return false;
+  return prefixes.some(prefix => path.startsWith(prefix));
+}
+
 export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   /** @override */
   static DEFAULT_OPTIONS = {
@@ -103,11 +117,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._checkingLinks = false;
     this._fixingBroken = false;
     /**
-     * Key: originalPath
-     * Value: {
-     *   candidates: Array<{ path: string, score: number, method: string }>,
-     *   confirmedIndex: number|null
-     * }
      * @type {Map<string, { candidates: Array<{path:string,score:number,method:string}>, confirmedIndex: number|null }>}
      */
     this._possibleMatches = new Map();
@@ -117,13 +126,123 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._stemIndex = null;
     /** @type {Array<{path:string,tokens:string[]}> | null} */
     this._tokenList = null;
+
+    // Load persisted deny list from game settings (falls back to empty array).
+    /** @type {string[]} */
+    this._denyPrefixes = this._loadDenyList();
   }
+
+  // ---------------------------------------------------------------------------
+  // Deny list helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Reads the deny list from game settings.
+   * Returns an array of non-empty trimmed prefix strings.
+   * @returns {string[]}
+   */
+  _loadDenyList() {
+    try {
+      const raw = game.settings.get('pack-my-world', DENY_LIST_SETTING);
+      return (raw || '')
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Persists an array of prefixes to game settings.
+   * @param {string[]} prefixes
+   */
+  async _saveDenyList(prefixes) {
+    try {
+      await game.settings.set('pack-my-world', DENY_LIST_SETTING, prefixes.join('\n'));
+    } catch (err) {
+      console.warn('Pack My World | Could not save deny list:', err);
+    }
+  }
+
+  /**
+   * Opens a DialogV2 that lets the GM edit the deny list.
+   * On confirm the list is saved and the report re-renders.
+   */
+  async _onEditDenyList() {
+    const currentRaw = this._denyPrefixes.join('\n');
+
+    const content = await renderTemplate(
+      'modules/pack-my-world/templates/path-deny-list.hbs',
+      { denyList: currentRaw }
+    );
+
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: 'Pack My World — Path Deny List' },
+      content,
+      yes: { label: 'Save', icon: 'fa-solid fa-floppy-disk' },
+      no:  { label: 'Cancel' },
+      render: (event, html) => {
+        // Make the textarea taller inside the dialog.
+        const ta = html.querySelector('#pmw-deny-textarea');
+        if (ta) ta.style.width = '100%';
+      }
+    });
+
+    if (!confirmed) return;
+
+    // Grab the textarea value from the last rendered dialog DOM.
+    // DialogV2.confirm resolves true/false so we must re-read the setting
+    // via a custom approach: attach the value before the dialog closes.
+    // We use a closure variable updated via the render callback.
+    let rawValue = currentRaw;
+    await foundry.applications.api.DialogV2.wait({
+      window: { title: 'Pack My World — Path Deny List' },
+      content,
+      buttons: [
+        {
+          action: 'save',
+          label: 'Save',
+          icon: 'fa-solid fa-floppy-disk',
+          default: true,
+          callback: (event, button, dialog) => {
+            rawValue = dialog.querySelector('#pmw-deny-textarea')?.value ?? '';
+            return true;
+          }
+        },
+        {
+          action: 'cancel',
+          label: 'Cancel',
+          callback: () => false
+        }
+      ]
+    }).then(async (result) => {
+      if (result === 'save') {
+        const prefixes = rawValue
+          .split('\n')
+          .map(l => l.trim())
+          .filter(l => l.length > 0);
+        this._denyPrefixes = prefixes;
+        await this._saveDenyList(prefixes);
+        this.render();
+      }
+    }).catch(() => {});
+  }
+
+  // ---------------------------------------------------------------------------
+  // Context
+  // ---------------------------------------------------------------------------
 
   /** @override */
   async _prepareContext() {
     const tabIds = ['scene', 'actor', 'item', 'journal', 'playlist', 'macro', 'table', 'compendium'];
+
+    // Apply deny list before grouping so counts are accurate.
+    const allowedAssets = this._assets.filter(a => !isDenied(a.originalPath, this._denyPrefixes));
+    const denyCount = this._assets.length - allowedAssets.length;
+
     const grouped = {};
-    for (const t of tabIds) grouped[t] = this._assets.filter(a => a.documentType === t);
+    for (const t of tabIds) grouped[t] = allowedAssets.filter(a => a.documentType === t);
 
     const tabs = tabIds.map(t => ({
       id: t,
@@ -203,9 +322,9 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const copyDone = this._copyResults.size > 0;
     const copySuccessCount = [...this._copyResults.values()].filter(v => v === 'success').length;
     const copyErrorCount  = [...this._copyResults.values()].filter(v => v === 'error').length;
-    const totalBroken = this._assets.filter(a => a.isBroken).length;
-    const linkCheckDone = this._assets.some(a => a.isBroken !== undefined && a.isBroken !== false)
-      || (this._assets.length > 0 && this._assets.every(a => a.isBroken !== undefined));
+    const totalBroken = allowedAssets.filter(a => a.isBroken).length;
+    const linkCheckDone = allowedAssets.some(a => a.isBroken !== undefined && a.isBroken !== false)
+      || (allowedAssets.length > 0 && allowedAssets.every(a => a.isBroken !== undefined));
     const totalPossibleMatches = this._possibleMatches.size;
     const totalConfirmed = [...this._possibleMatches.values()].filter(v => v.confirmedIndex !== null).length;
 
@@ -214,9 +333,9 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       activeTab: this._activeTab,
       visibleAssets,
       statusFilters,
-      totalFound: this._assets.length,
-      totalExternal: this._assets.filter(a => a.isExternal).length,
-      totalWildcard: this._assets.filter(a => a.isWildcard).length,
+      totalFound: allowedAssets.length,
+      totalExternal: allowedAssets.filter(a => a.isExternal).length,
+      totalWildcard: allowedAssets.filter(a => a.isWildcard).length,
       totalBroken,
       linkCheckDone,
       checkingLinks: this._checkingLinks,
@@ -231,9 +350,14 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       copying: this._copying,
       copyDone,
       copySuccessCount,
-      copyErrorCount
+      copyErrorCount,
+      denyCount
     };
   }
+
+  // ---------------------------------------------------------------------------
+  // Render / event wiring
+  // ---------------------------------------------------------------------------
 
   /** @override */
   _onRender(context, options) {
@@ -271,6 +395,9 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     });
 
+    const denyBtn = this.element.querySelector('#pmw-deny-list-btn');
+    if (denyBtn) denyBtn.addEventListener('click', () => this._onEditDenyList());
+
     const copyBtn = this.element.querySelector('#pmw-copy-btn');
     if (copyBtn) copyBtn.addEventListener('click', () => this._onCopyFiles());
 
@@ -299,6 +426,10 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // Document / asset helpers
+  // ---------------------------------------------------------------------------
 
   /**
    * @param {string} id
@@ -339,6 +470,10 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       window.open(url, '_blank');
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Link check / fix broken
+  // ---------------------------------------------------------------------------
 
   /** @returns {Promise<void>} */
   async _onCheckLinks() {
@@ -425,17 +560,14 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!existing || existing.score < score) seen.set(path, { score, method });
       };
 
-      // Phase 1 — exact basename
       for (const p of (this._fileIndex.get(lowerBasename) ?? []))
         addCandidate(p, 1.0, 'exact');
 
-      // Phase 2 — same stem, different extension
       for (const p of (this._stemIndex.get(stem) ?? [])) {
         if (p.split('/').pop().toLowerCase() !== lowerBasename)
           addCandidate(p, 0.9, 'stem');
       }
 
-      // Phase 3 — token overlap (threshold raised to TOKEN_THRESHOLD)
       if (assetTokens.length >= 2) {
         for (const entry of this._tokenList) {
           const sc = tokenScore(assetTokens, entry.tokens);
@@ -484,6 +616,10 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const nested = await Promise.all(dirs.map(d => this._browseAllFiles(source, d, depth + 1)));
     return [...files, ...nested.flat()];
   }
+
+  // ---------------------------------------------------------------------------
+  // Copy files
+  // ---------------------------------------------------------------------------
 
   /** @returns {Promise<void>} */
   async _onCopyFiles() {

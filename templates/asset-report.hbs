@@ -29,8 +29,15 @@
         <span class="pmw-copy-err">Failed: <strong>{{copyErrorCount}}</strong></span>
         {{/if}}
         {{/if}}
+        {{#if denyCount}}
+        <span class="pmw-sep">|</span>
+        <span class="pmw-deny-count" title="Paths hidden by deny list">Denied: <strong>{{denyCount}}</strong></span>
+        {{/if}}
       </div>
       <div class="pmw-toolbar-btns">
+        <button id="pmw-deny-list-btn" class="pmw-action-btn pmw-action-btn--deny" title="Edit path deny list">
+          <i class="fa-solid fa-filter"></i> Deny List
+        </button>
         <button id="pmw-check-links-btn" class="pmw-action-btn {{#if checkingLinks}}pmw-action-btn--disabled{{/if}}" {{#if checkingLinks}}disabled{{/if}}>
           {{#if checkingLinks}}
             <i class="fa-solid fa-spinner fa-spin"></i> Checking…

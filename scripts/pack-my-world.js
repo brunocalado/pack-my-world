@@ -20,7 +20,6 @@ const PackMyWorld = {
     const assets = await AssetScanner.scan();
     const app = new AssetReportApp(assets);
     await app.render(true);
-    // Automatically begin broken-link check right after the window opens.
     app._onCheckLinks();
   }
 };
@@ -28,5 +27,15 @@ const PackMyWorld = {
 window.PackMyWorld = PackMyWorld;
 
 Hooks.once('ready', () => {
+  // Register setting to persist the deny list across sessions.
+  game.settings.register('pack-my-world', 'pathDenyList', {
+    name: 'Path Deny List',
+    hint: 'Newline-separated path prefixes to exclude from the asset report.',
+    scope: 'world',
+    config: false,
+    type: String,
+    default: ''
+  });
+
   console.log('Pack My World | Ready. Call PackMyWorld.Start() to scan assets.');
 });
