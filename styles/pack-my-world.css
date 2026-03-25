@@ -238,6 +238,9 @@
   z-index: 1;
 }
 
+/* Status column gets a fixed generous width */
+.pmw-th-status { width: 340px; min-width: 280px; }
+
 .pmw-row { border-bottom: 1px solid #2a2a2a; }
 .pmw-row:hover { background: rgba(255,255,255,0.03); }
 .pmw-row.pmw-external  { background: rgba(232,160,32,0.05); }
@@ -278,7 +281,6 @@
   color: var(--color-text-light-6, #aaa);
 }
 .pmw-path--proposed { color: #7ab4f0; }
-.pmw-path--match    { color: #f0c040; }
 
 .pmw-wildcard-badge {
   display: inline-block;
@@ -298,7 +300,16 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  white-space: nowrap;
+  flex-wrap: wrap;
+}
+
+/* Possible-match path shown inline in status cell */
+.pmw-match-path {
+  font-family: monospace;
+  font-size: 0.68rem;
+  color: #f0c040;
+  word-break: break-all;
+  flex: 1 1 auto;
 }
 
 /* ── Preview button (magnifier) ────────────────────────────────── */
@@ -321,23 +332,15 @@
   background: rgba(122,180,240,0.15);
 }
 .pmw-preview-btn--disabled {
-  color: #444;
+  color: #3a3a3a;
   cursor: not-allowed;
 }
 .pmw-preview-btn--disabled:hover {
-  color: #444;
+  color: #3a3a3a;
   background: none;
 }
 
-/* ── Match cell ──────────────────────────────────────────────────── */
-.pmw-match-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 200px;
-  max-width: 320px;
-}
-
+/* ── Confirm match button ──────────────────────────────────────────── */
 .pmw-confirm-match-btn {
   all: unset;
   cursor: pointer;

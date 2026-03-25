@@ -93,8 +93,7 @@
           <th>Type</th>
           <th>Current Path</th>
           <th>Expected New Path</th>
-          <th>Status</th>
-          <th>Match Found</th>
+          <th class="pmw-th-status">Status</th>
         </tr>
       </thead>
       <tbody>
@@ -108,10 +107,25 @@
           </td>
           <td class="pmw-path pmw-path--proposed" title="{{proposedPath}}">{{proposedPath}}</td>
           <td class="pmw-status">
+            {{!-- Preview icon first --}}
+            {{#if (and isBroken (not possibleMatch) (not matchConfirmed))}}
+              <button class="pmw-preview-btn pmw-preview-btn--disabled" disabled title="File not found — cannot preview">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </button>
+            {{else}}
+              <button class="pmw-preview-btn" data-path="{{previewPath}}" data-type="{{type}}" title="Preview asset">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </button>
+            {{/if}}
+            {{!-- Status tag --}}
             {{#if matchConfirmed}}
               <span class="pmw-tag pmw-tag--confirmed">&#x2713; Confirmed</span>
             {{else if possibleMatch}}
               <span class="pmw-tag pmw-tag--possible">&#x3F; Possible Match</span>
+              <span class="pmw-match-path" title="{{possibleMatch}}">{{possibleMatch}}</span>
+              <button class="pmw-confirm-match-btn" data-original="{{originalPath}}" title="Confirm this match is correct">
+                <i class="fa-solid fa-check"></i> Confirm
+              </button>
             {{else if isBroken}}
               <span class="pmw-tag pmw-tag--broken">&#x2717; Broken</span>
             {{else if copyStatus}}
@@ -125,28 +139,6 @@
                 <span class="pmw-tag pmw-tag--warn" title="Will attempt fetch; may fail if CORS is blocked">⚠ External URL</span>
               {{else}}
                 <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
-              {{/if}}
-            {{/if}}
-            {{!-- Preview icon: disabled only when broken with no match --}}
-            {{#if (and isBroken (not possibleMatch) (not matchConfirmed))}}
-              <button class="pmw-preview-btn pmw-preview-btn--disabled" disabled title="File not found — cannot preview">
-                <i class="fa-solid fa-magnifying-glass"></i>
-              </button>
-            {{else}}
-              <button class="pmw-preview-btn" data-path="{{previewPath}}" data-type="{{type}}" title="Preview asset">
-                <i class="fa-solid fa-magnifying-glass"></i>
-              </button>
-            {{/if}}
-          </td>
-          <td class="pmw-match-cell">
-            {{#if possibleMatch}}
-              {{#if matchConfirmed}}
-                <span class="pmw-path pmw-path--match" title="{{possibleMatch}}">{{possibleMatch}}</span>
-              {{else}}
-                <span class="pmw-path pmw-path--match" title="{{possibleMatch}}">{{possibleMatch}}</span>
-                <button class="pmw-confirm-match-btn" data-original="{{originalPath}}" title="Confirm this match is correct">
-                  <i class="fa-solid fa-check"></i> Confirm
-                </button>
               {{/if}}
             {{/if}}
           </td>
