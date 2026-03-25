@@ -57,6 +57,14 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
      * @type {Map<string, { matchPath: string, confirmed: boolean }>}
      */
     this._possibleMatches = new Map();
+    /**
+     * In-memory index of all files found in Foundry Data, built on first Fix Broken run.
+     * Keyed by lowercase basename. Null until first browse completes.
+     * Cleared when Check Links reruns (world state may have changed).
+     * Automatically discarded when the window closes (instance is destroyed).
+     * @type {Map<string, string[]> | null}
+     */
+    this._fileIndex = null;
   }
 
   /** @override */
@@ -97,16 +105,11 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (this._activeTab === 'compendium' && this._compendiumSubFilter !== 'all')
       visibleAssets = visibleAssets.filter(a => a.documentSubType === this._compendiumSubFilter);
 
-    // Annotate each visible asset with copy result, possible-match data, and resolved preview path.
     const annotated = visibleAssets.map(a => {
       const match = this._possibleMatches.get(a.originalPath);
       const possibleMatch = match ? match.matchPath : null;
       const matchConfirmed = match ? match.confirmed : false;
 
-      // Preview path resolution:
-      // - broken with match (confirmed or not) → matchPath
-      // - broken, no match                     → null (button disabled in template)
-      // - everything else                      → originalPath
       let previewPath;
       if (a.isBroken) {
         previewPath = possibleMatch ?? null;
@@ -228,6 +231,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Runs broken-link detection across all assets.
+   * Also clears the file index so a subsequent Fix Broken reflects the current state.
    * @returns {Promise<void>}
    */
   async _onCheckLinks() {
@@ -235,6 +239,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._checkingLinks = true;
     for (const a of this._assets) a.isBroken = false;
     this._possibleMatches.clear();
+    this._fileIndex = null; // invalidate cache — world state may change between checks
     await this.render();
 
     await checkBrokenLinks(this._assets);
@@ -252,7 +257,9 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Searches all Foundry Data for files matching broken-link filenames.
-   * Updates _possibleMatches with found candidates.
+   * Builds and caches a file index on first run; reuses it on subsequent calls
+   * within the same session (window open). Cache is cleared by _onCheckLinks
+   * and discarded automatically when the window closes.
    * Does NOT update any entity data — purely visual.
    * @returns {Promise<void>}
    */
@@ -268,26 +275,27 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._fixingBroken = true;
     await this.render();
 
-    let allFiles = [];
-    try {
-      allFiles = await this._browseAllFiles('data', '');
-    } catch (err) {
-      console.warn('Pack My World | Fix Broken: could not browse Foundry Data:', err);
-    }
-
-    /** @type {Map<string, string[]>} */
-    const byFilename = new Map();
-    for (const filePath of allFiles) {
-      const basename = filePath.split('/').pop().toLowerCase();
-      if (!byFilename.has(basename)) byFilename.set(basename, []);
-      byFilename.get(basename).push(filePath);
+    // Build index only if not already cached.
+    if (!this._fileIndex) {
+      let allFiles = [];
+      try {
+        allFiles = await this._browseAllFiles('data', '');
+      } catch (err) {
+        console.warn('Pack My World | Fix Broken: could not browse Foundry Data:', err);
+      }
+      this._fileIndex = new Map();
+      for (const filePath of allFiles) {
+        const basename = filePath.split('/').pop().toLowerCase();
+        if (!this._fileIndex.has(basename)) this._fileIndex.set(basename, []);
+        this._fileIndex.get(basename).push(filePath);
+      }
     }
 
     let found = 0;
     for (const asset of brokenAssets) {
       if (this._possibleMatches.has(asset.originalPath)) continue;
       const basename = asset.originalPath.split('/').pop().toLowerCase();
-      const candidates = byFilename.get(basename) ?? [];
+      const candidates = this._fileIndex.get(basename) ?? [];
       if (candidates.length > 0) {
         this._possibleMatches.set(asset.originalPath, { matchPath: candidates[0], confirmed: false });
         found++;
