@@ -28,7 +28,7 @@ const STATUS_FILTERS = [
 const OPENABLE_TYPES = new Set(['scene', 'actor', 'item', 'journal', 'macro', 'table', 'playlist']);
 
 const MAX_CANDIDATES = 5;
-const TOKEN_THRESHOLD = 0.65;
+const TOKEN_THRESHOLD = 0.5;
 
 /**
  * Splits a filename stem into lowercase tokens.
