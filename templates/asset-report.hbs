@@ -106,7 +106,11 @@
       </thead>
       <tbody>
         {{#each visibleAssets}}
-        <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}} {{#if isWildcard}}pmw-wildcard{{/if}} {{#if isBroken}}pmw-broken{{/if}} {{#if matchConfirmed}}pmw-confirmed{{/if}}">
+        <tr class="pmw-row
+          {{#if isExternal}}pmw-external{{/if}}
+          {{#if isWildcard}}pmw-wildcard{{/if}}
+          {{#if isBroken}}pmw-broken{{/if}}
+          {{#if matchConfirmed}}pmw-confirmed{{/if}}">
           <td class="pmw-doc-name" title="{{documentName}}">
             {{#if canOpenDocument}}
               <button class="pmw-open-doc-btn" data-id="{{documentId}}" data-doctype="{{documentType}}" title="Open {{documentType}}">
@@ -122,38 +126,71 @@
           </td>
           <td class="pmw-path pmw-path--proposed" title="{{proposedPath}}">{{proposedPath}}</td>
           <td class="pmw-status">
-            {{#if (and isBroken (not possibleMatch) (not matchConfirmed))}}
-              <button class="pmw-preview-btn pmw-preview-btn--disabled" disabled title="File not found — cannot preview">
-                <i class="fa-solid fa-magnifying-glass"></i>
-              </button>
-            {{else}}
-              <button class="pmw-preview-btn" data-path="{{previewPath}}" data-type="{{type}}" title="Preview asset">
-                <i class="fa-solid fa-magnifying-glass"></i>
-              </button>
-            {{/if}}
+
+            {{!-- === CONFIRMED === --}}
             {{#if matchConfirmed}}
-              <span class="pmw-tag pmw-tag--confirmed">&#x2713; Confirmed</span>
-            {{else if possibleMatch}}
-              <span class="pmw-tag pmw-tag--possible">&#x3F; Possible Match</span>
-              <span class="pmw-match-path" title="{{possibleMatch}}">{{possibleMatch}}</span>
-              <button class="pmw-confirm-match-btn" data-original="{{originalPath}}" title="Confirm this match is correct">
-                <i class="fa-solid fa-check"></i> Confirm
-              </button>
+              <div class="pmw-status-inner">
+                <button class="pmw-preview-btn" data-path="{{confirmedPath}}" data-type="{{type}}" title="Preview confirmed asset">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                </button>
+                <span class="pmw-tag pmw-tag--confirmed">&#x2713; Confirmed</span>
+                <span class="pmw-match-path" title="{{confirmedPath}}">{{confirmedPath}}</span>
+              </div>
+
+            {{!-- === HAS CANDIDATES (not yet confirmed) === --}}
+            {{else if hasCandidates}}
+              <div class="pmw-candidates">
+                {{#each candidates}}
+                <div class="pmw-candidate {{#if isConfirmed}}pmw-candidate--confirmed{{/if}}">
+                  <button class="pmw-preview-btn" data-path="{{path}}" data-type="{{../type}}" title="Preview this candidate">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                  </button>
+                  <span class="pmw-candidate-method pmw-candidate-method--{{method}}">{{method}}</span>
+                  <span class="pmw-candidate-score">{{scoreLabel}}</span>
+                  <span class="pmw-candidate-path" title="{{path}}">{{path}}</span>
+                  <button class="pmw-confirm-match-btn" data-original="{{originalPath}}" data-index="{{index}}" title="Confirm this is the correct file">
+                    <i class="fa-solid fa-check"></i>
+                  </button>
+                </div>
+                {{/each}}
+              </div>
+
+            {{!-- === BROKEN, NO CANDIDATES === --}}
             {{else if isBroken}}
-              <span class="pmw-tag pmw-tag--broken">&#x2717; Broken</span>
+              <div class="pmw-status-inner">
+                <button class="pmw-preview-btn pmw-preview-btn--disabled" disabled title="File not found — cannot preview">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                </button>
+                <span class="pmw-tag pmw-tag--broken">&#x2717; Broken</span>
+              </div>
+
+            {{!-- === COPY RESULT === --}}
             {{else if copyStatus}}
-              {{#if (eq copyStatus 'success')}}
-                <span class="pmw-tag pmw-tag--copied">&#x2713; Copied</span>
-              {{else}}
-                <span class="pmw-tag pmw-tag--error">&#x2717; Failed</span>
-              {{/if}}
+              <div class="pmw-status-inner">
+                <button class="pmw-preview-btn" data-path="{{previewPath}}" data-type="{{type}}" title="Preview asset">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                </button>
+                {{#if (eq copyStatus 'success')}}
+                  <span class="pmw-tag pmw-tag--copied">&#x2713; Copied</span>
+                {{else}}
+                  <span class="pmw-tag pmw-tag--error">&#x2717; Failed</span>
+                {{/if}}
+              </div>
+
+            {{!-- === NORMAL === --}}
             {{else}}
-              {{#if isExternal}}
-                <span class="pmw-tag pmw-tag--warn" title="Will attempt fetch; may fail if CORS is blocked">⚠ External URL</span>
-              {{else}}
-                <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
-              {{/if}}
+              <div class="pmw-status-inner">
+                <button class="pmw-preview-btn" data-path="{{previewPath}}" data-type="{{type}}" title="Preview asset">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                </button>
+                {{#if isExternal}}
+                  <span class="pmw-tag pmw-tag--warn" title="Will attempt fetch; may fail if CORS is blocked">⚠ External URL</span>
+                {{else}}
+                  <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
+                {{/if}}
+              </div>
             {{/if}}
+
           </td>
         </tr>
         {{/each}}

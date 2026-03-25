@@ -25,17 +25,50 @@ const STATUS_FILTERS = [
   { id: 'external',  label: 'External' },
 ];
 
-/** Document types that support opening via their sheet/view. Compendium excluded. */
 const OPENABLE_TYPES = new Set(['scene', 'actor', 'item', 'journal', 'macro', 'table', 'playlist']);
 
-/** @param {import('./asset-scanner.js').AssetEntry & { copyStatus, possibleMatch, matchConfirmed }} a */
+const MAX_CANDIDATES = 5;
+
+/**
+ * Splits a filename stem into lowercase tokens.
+ * Handles kebab-case, snake_case, dot.case, spaces, and camelCase.
+ * @param {string} stem
+ * @returns {string[]}
+ */
+function stemToTokens(stem) {
+  return stem
+    .toLowerCase()
+    // split camelCase: "DragonToken" → "Dragon Token"
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(/[-_.\s]+/)
+    .filter(t => t.length > 1);
+}
+
+/**
+ * Token overlap score: shared tokens / max(|a|, |b|)
+ * Returns 0..1.
+ * @param {string[]} tokensA
+ * @param {string[]} tokensB
+ * @returns {number}
+ */
+function tokenScore(tokensA, tokensB) {
+  if (!tokensA.length || !tokensB.length) return 0;
+  const setA = new Set(tokensA);
+  const shared = tokensB.filter(t => setA.has(t)).length;
+  return shared / Math.max(tokensA.length, tokensB.length);
+}
+
+/**
+ * Derives the status key for a fully-annotated asset row.
+ * @param {object} a
+ */
 function getStatusKey(a) {
-  if (a.matchConfirmed)               return 'confirmed';
-  if (a.possibleMatch)                return 'possible';
-  if (a.isBroken)                     return 'broken';
-  if (a.copyStatus === 'success')     return 'copied';
-  if (a.copyStatus === 'error')       return 'error';
-  if (a.isExternal)                   return 'external';
+  if (a.matchConfirmed)           return 'confirmed';
+  if (a.hasCandidates)            return 'possible';
+  if (a.isBroken)                 return 'broken';
+  if (a.copyStatus === 'success') return 'copied';
+  if (a.copyStatus === 'error')   return 'error';
+  if (a.isExternal)               return 'external';
   return 'copyable';
 }
 
@@ -64,14 +97,20 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._activeTab = 'scene';
     this._sceneSubFilter = 'all';
     this._compendiumSubFilter = 'all';
-    /** @type {'all'|'broken'|'possible'|'confirmed'|'copyable'|'copied'|'external'} */
     this._statusFilter = 'all';
     /** @type {Map<string, 'success'|'error'|'skip'>} */
     this._copyResults = new Map();
     this._copying = false;
     this._checkingLinks = false;
     this._fixingBroken = false;
-    /** @type {Map<string, { matchPath: string, confirmed: boolean }>} */
+    /**
+     * Key: originalPath
+     * Value: {
+     *   candidates: Array<{ path: string, score: number, method: 'exact'|'stem'|'token' }>,
+     *   confirmedIndex: number|null
+     * }
+     * @type {Map<string, { candidates: Array<{path:string,score:number,method:string}>, confirmedIndex: number|null }>}
+     */
     this._possibleMatches = new Map();
     /** @type {Map<string, string[]> | null} */
     this._fileIndex = null;
@@ -117,14 +156,29 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const annotated = baseAssets.map(a => {
       const match = this._possibleMatches.get(a.originalPath);
-      const possibleMatch = match ? match.matchPath : null;
-      const matchConfirmed = match ? match.confirmed : false;
-      const previewPath = a.isBroken ? (possibleMatch ?? null) : a.originalPath;
+      const confirmedIndex = match ? match.confirmedIndex : null;
+      const confirmed = confirmedIndex !== null && match.candidates[confirmedIndex] != null;
+      const confirmedPath = confirmed ? match.candidates[confirmedIndex].path : null;
+
+      // Candidates enriched with per-candidate flags for the template.
+      const candidates = match ? match.candidates.map((c, i) => ({
+        ...c,
+        index: i,
+        isConfirmed: i === confirmedIndex,
+        scoreLabel: Math.round(c.score * 100) + '%',
+        originalPath: a.originalPath
+      })) : [];
+
+      const hasCandidates = candidates.length > 0;
+      const previewPath = a.isBroken ? (confirmedPath ?? (hasCandidates ? candidates[0].path : null)) : a.originalPath;
+
       return {
         ...a,
         copyStatus: this._copyResults.get(a.originalPath) ?? null,
-        possibleMatch,
-        matchConfirmed,
+        candidates,
+        hasCandidates,
+        matchConfirmed: confirmed,
+        confirmedPath,
         previewPath,
         canOpenDocument: OPENABLE_TYPES.has(a.documentType)
       };
@@ -149,7 +203,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const linkCheckDone = this._assets.some(a => a.isBroken !== undefined && a.isBroken !== false)
       || (this._assets.length > 0 && this._assets.every(a => a.isBroken !== undefined));
     const totalPossibleMatches = this._possibleMatches.size;
-    const totalConfirmed = [...this._possibleMatches.values()].filter(v => v.confirmed).length;
+    const totalConfirmed = [...this._possibleMatches.values()].filter(v => v.confirmedIndex !== null).length;
 
     return {
       tabs,
@@ -222,17 +276,19 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const fixBtn = this.element.querySelector('#pmw-fix-broken-btn');
     if (fixBtn) fixBtn.addEventListener('click', () => this._onFixBroken());
 
+    // Confirm a specific candidate by index.
     this.element.querySelectorAll('.pmw-confirm-match-btn').forEach(btn => {
       btn.addEventListener('click', e => {
-        const originalPath = e.currentTarget.dataset.original;
-        const existing = this._possibleMatches.get(originalPath);
+        const { original, index } = e.currentTarget.dataset;
+        const existing = this._possibleMatches.get(original);
         if (existing) {
-          existing.confirmed = true;
+          existing.confirmedIndex = parseInt(index, 10);
           this.render();
         }
       });
     });
 
+    // Preview a specific candidate path.
     this.element.querySelectorAll('.pmw-preview-btn:not(.pmw-preview-btn--disabled)').forEach(btn => {
       btn.addEventListener('click', e => {
         const path = e.currentTarget.dataset.path;
@@ -244,13 +300,10 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Opens the Foundry sheet/view for the given document.
-   * Scene uses .view(); everything else uses .sheet.render(true).
-   * Compendium entries are excluded upstream via canOpenDocument.
    * @param {string} id
    * @param {string} doctype
    */
   _onOpenDocument(id, doctype) {
-    /** @type {foundry.abstract.Document|undefined} */
     let doc;
     switch (doctype) {
       case 'scene':    doc = game.scenes.get(id);    break;
@@ -265,11 +318,8 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       ui.notifications.warn(`Pack My World: could not find ${doctype} with id "${id}".`);
       return;
     }
-    if (doctype === 'scene') {
-      doc.view();
-    } else {
-      doc.sheet.render(true);
-    }
+    if (doctype === 'scene') doc.view();
+    else doc.sheet.render(true);
   }
 
   /**
@@ -326,6 +376,9 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._fixingBroken = true;
     await this.render();
 
+    // Build index if not cached.
+    // Primary key: lowercase basename → [paths]
+    // Secondary key: lowercase stem (no ext) → [paths]
     if (!this._fileIndex) {
       let allFiles = [];
       try {
@@ -333,32 +386,90 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       } catch (err) {
         console.warn('Pack My World | Fix Broken: could not browse Foundry Data:', err);
       }
+
+      /** @type {Map<string, string[]>} keyed by lowercase basename */
       this._fileIndex = new Map();
+      /** @type {Map<string, string[]>} keyed by lowercase stem (no extension) */
+      this._stemIndex = new Map();
+      /** @type {Array<{ path: string, tokens: string[] }>} for token search */
+      this._tokenList = [];
+
       for (const filePath of allFiles) {
-        const basename = filePath.split('/').pop().toLowerCase();
-        if (!this._fileIndex.has(basename)) this._fileIndex.set(basename, []);
-        this._fileIndex.get(basename).push(filePath);
+        const basename = filePath.split('/').pop();
+        const lowerBasename = basename.toLowerCase();
+        const dotIdx = lowerBasename.lastIndexOf('.');
+        const stem = dotIdx > 0 ? lowerBasename.slice(0, dotIdx) : lowerBasename;
+        const tokens = stemToTokens(stem);
+
+        // basename index
+        if (!this._fileIndex.has(lowerBasename)) this._fileIndex.set(lowerBasename, []);
+        this._fileIndex.get(lowerBasename).push(filePath);
+
+        // stem index
+        if (!this._stemIndex.has(stem)) this._stemIndex.set(stem, []);
+        this._stemIndex.get(stem).push(filePath);
+
+        // token list
+        if (tokens.length > 0) this._tokenList.push({ path: filePath, tokens });
       }
     }
 
     let found = 0;
     for (const asset of brokenAssets) {
       if (this._possibleMatches.has(asset.originalPath)) continue;
-      const basename = asset.originalPath.split('/').pop().toLowerCase();
-      const candidates = this._fileIndex.get(basename) ?? [];
-      if (candidates.length > 0) {
-        this._possibleMatches.set(asset.originalPath, { matchPath: candidates[0], confirmed: false });
-        found++;
+
+      const basename = asset.originalPath.split('/').pop();
+      const lowerBasename = basename.toLowerCase();
+      const dotIdx = lowerBasename.lastIndexOf('.');
+      const stem = dotIdx > 0 ? lowerBasename.slice(0, dotIdx) : lowerBasename;
+      const assetTokens = stemToTokens(stem);
+
+      /** @type {Map<string, {score:number, method:string}>} deduplicated by path */
+      const seen = new Map();
+
+      const addCandidate = (path, score, method) => {
+        const existing = seen.get(path);
+        // keep highest score if path already found by another method
+        if (!existing || existing.score < score) seen.set(path, { score, method });
+      };
+
+      // Phase 1 — exact basename match
+      for (const p of (this._fileIndex.get(lowerBasename) ?? []))
+        addCandidate(p, 1.0, 'exact');
+
+      // Phase 2 — same stem, any extension
+      for (const p of (this._stemIndex.get(stem) ?? [])) {
+        const pBasename = p.split('/').pop().toLowerCase();
+        if (pBasename !== lowerBasename) addCandidate(p, 0.9, 'stem');
       }
+
+      // Phase 3 — token overlap (only if we have at least 2 tokens to avoid noise)
+      if (assetTokens.length >= 2) {
+        for (const entry of this._tokenList) {
+          const sc = tokenScore(assetTokens, entry.tokens);
+          if (sc >= 0.5) addCandidate(entry.path, sc * 0.85, 'token');
+        }
+      }
+
+      if (seen.size === 0) continue;
+
+      // Sort by score desc, cap at MAX_CANDIDATES.
+      const candidates = [...seen.entries()]
+        .map(([path, { score, method }]) => ({ path, score, method }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, MAX_CANDIDATES);
+
+      this._possibleMatches.set(asset.originalPath, { candidates, confirmedIndex: null });
+      found++;
     }
 
     this._fixingBroken = false;
     await this.render();
 
     if (found > 0) {
-      ui.notifications.info(`Pack My World: Found ${found} possible match(es) for broken links.`);
+      ui.notifications.info(`Pack My World: Found candidates for ${found} broken link(s).`);
     } else {
-      ui.notifications.warn('Pack My World: No matches found for broken links.');
+      ui.notifications.warn('Pack My World: No candidates found for broken links.');
     }
   }
 
