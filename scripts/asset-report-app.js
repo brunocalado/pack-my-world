@@ -3,7 +3,7 @@
  */
 
 import { AssetCopier } from './asset-copier.js';
-import { checkBrokenLinks } from './asset-scanner.js';
+import { AssetScanner, checkBrokenLinks, inferType } from './asset-scanner.js';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -32,21 +32,6 @@ const TOKEN_THRESHOLD = 0.5;
 
 /** Setting key used to persist the deny list across sessions. */
 const DENY_LIST_SETTING = 'pathDenyList';
-
-/**
- * Infers the media type of a file from its extension.
- * Mirrors the logic in asset-scanner.js (which is not exported).
- * @param {string} path
- * @returns {'image'|'audio'|'video'|'unknown'}
- */
-function inferType(path) {
-  if (!path) return 'unknown';
-  const ext = path.split('.').pop().toLowerCase().split('?')[0];
-  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'avif'].includes(ext)) return 'image';
-  if (['mp3', 'ogg', 'wav', 'flac', 'm4a', 'aac'].includes(ext))          return 'audio';
-  if (['mp4', 'webm', 'ogv'].includes(ext))                                return 'video';
-  return 'unknown';
-}
 
 /**
  * Splits a filename stem into lowercase tokens.
@@ -544,7 +529,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!this._stemIndex.has(stem)) this._stemIndex.set(stem, []);
         this._stemIndex.get(stem).push(filePath);
 
-        // Store type alongside path and tokens for Phase 3 type filtering.
         if (tokens.length > 0) this._tokenList.push({ path: filePath, tokens, type: fileType });
       }
     }
@@ -568,18 +552,18 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!existing || existing.score < score) seen.set(path, { score, method });
       };
 
-      // Phase 1 — exact basename match (any type, already specific enough).
+      // Phase 1 — exact basename match.
       for (const p of (this._fileIndex.get(lowerBasename) ?? []))
         addCandidate(p, 1.0, 'exact');
 
-      // Phase 2 — same stem, different extension (any type, explicit conversion).
+      // Phase 2 — same stem, different extension.
       for (const p of (this._stemIndex.get(stem) ?? [])) {
         if (p.split('/').pop().toLowerCase() !== lowerBasename)
           addCandidate(p, 0.9, 'stem');
       }
 
       // Phase 3 — token overlap, restricted to same media type.
-      // 'unknown' assets are not filtered so unrecognised extensions still get candidates.
+      // 'unknown' assets skip the type filter so unrecognised extensions still get candidates.
       if (assetTokens.length >= 2) {
         for (const entry of this._tokenList) {
           if (assetType !== 'unknown' && entry.type !== assetType) continue;

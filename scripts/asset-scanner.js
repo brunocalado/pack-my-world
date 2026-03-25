@@ -32,8 +32,12 @@ function isWildcardPath(path) {
   return typeof path === 'string' && path.trimEnd().endsWith('*');
 }
 
-/** @param {string} path @returns {'image'|'audio'|'video'|'unknown'} */
-function inferType(path) {
+/**
+ * Infers the media type of a file from its extension.
+ * @param {string} path
+ * @returns {'image'|'audio'|'video'|'unknown'}
+ */
+export function inferType(path) {
   if (!path) return 'unknown';
   const ext = path.split('.').pop().toLowerCase().split('?')[0];
   if (['png','jpg','jpeg','webp','gif','svg','avif'].includes(ext)) return 'image';
@@ -98,7 +102,6 @@ function buildProposedPath(originalPath) {
  * @returns {string}
  */
 function buildProposedWildcardPath(wildcardPath) {
-  // Strip trailing * to sanitize the prefix, then restore *.
   const prefix = wildcardPath.slice(0, -1);
   const { dir, name } = splitPath(prefix);
   return MY_ASSETS_PREFIX() + dir + sanitizeFilename(name) + '*';
@@ -120,7 +123,7 @@ function getFilePicker() {
  * @returns {Promise<string[]>} - Array of resolved file paths.
  */
 async function resolveWildcard(wildcardPath) {
-  const prefix = wildcardPath.slice(0, -1); // strip trailing *
+  const prefix = wildcardPath.slice(0, -1);
   const lastSlash = prefix.lastIndexOf('/');
   const dir = lastSlash >= 0 ? prefix.slice(0, lastSlash) : '.';
   const filePrefix = prefix.slice(lastSlash + 1).toLowerCase();
@@ -166,7 +169,6 @@ async function checkIsBroken(path) {
  * @returns {Promise<void>}
  */
 export async function checkBrokenLinks(entries, concurrency = 20) {
-  // Only check concrete, non-already-in-world entries. Skip unresolved wildcards.
   const toCheck = entries.filter(e => !e.isAlreadyInWorld && !(e.isWildcard && e.wildcardPath === e.originalPath));
 
   const queue = toCheck.slice();
@@ -261,7 +263,6 @@ export class AssetScanner {
     AssetScanner._scanTables(regularEntries);
     await AssetScanner._scanWorldCompendiums(regularEntries);
 
-    // Separate wildcards from concrete paths and resolve them.
     const concrete = regularEntries.filter(e => e !== null && !isWildcardPath(e.originalPath));
     const wildcardEntries = regularEntries.filter(e => e !== null && isWildcardPath(e.originalPath));
 
@@ -282,7 +283,6 @@ export class AssetScanner {
     for (const entry of wildcardEntries) {
       const files = await resolveWildcard(entry.originalPath);
       if (files.length === 0) {
-        // Keep the unresolved wildcard visible so the user knows it exists.
         results.push({ ...entry, isWildcard: true, wildcardPath: entry.originalPath });
       } else {
         for (const file of files) {
