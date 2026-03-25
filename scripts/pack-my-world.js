@@ -7,7 +7,8 @@ import { AssetReportApp } from './asset-report-app.js';
  */
 const PackMyWorld = {
   /**
-   * Scans all world entities and opens the asset report UI.
+   * Scans all world entities, opens the asset report UI,
+   * then automatically starts the broken-link check.
    * @returns {Promise<void>}
    */
   async Start() {
@@ -17,7 +18,10 @@ const PackMyWorld = {
     }
     ui.notifications.info('Pack My World: Scanning world assets...');
     const assets = await AssetScanner.scan();
-    new AssetReportApp(assets).render(true);
+    const app = new AssetReportApp(assets);
+    await app.render(true);
+    // Automatically begin broken-link check right after the window opens.
+    app._onCheckLinks();
   }
 };
 

@@ -23,7 +23,7 @@
   border-bottom: 1px solid var(--color-border-dark, #444);
 }
 
-/* Toolbar: summary + Copy Files button side by side */
+/* Toolbar: summary + action buttons side by side */
 .pmw-toolbar {
   display: flex;
   align-items: center;
@@ -42,11 +42,22 @@
 }
 .pmw-external-count { color: #e8a020; }
 .pmw-wildcard-count { color: #a070e0; }
+.pmw-broken-count   { color: #aaa; }
+.pmw-broken-count--has-broken { color: #e05050; }
 .pmw-copy-ok        { color: #5cb85c; }
 .pmw-copy-err       { color: #e05050; }
 .pmw-sep { opacity: 0.4; }
 
-/* Copy Files button */
+/* Action buttons row — always inline, never stacked */
+.pmw-toolbar-btns {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Individual action button */
 .pmw-action-btn {
   all: unset;
   cursor: pointer;
@@ -58,11 +69,12 @@
   color: #7acf7a;
   border: 1px solid #2a6a2a;
   white-space: nowrap;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   transition: background 0.15s, color 0.15s;
   flex-shrink: 0;
+  line-height: 1.4;
 }
 .pmw-action-btn:hover {
   background: #1e5e1e;
@@ -73,6 +85,22 @@
   color: #666;
   border-color: #444;
   cursor: not-allowed;
+}
+
+/* Check Links button — distinct colour (blue tint) */
+#pmw-check-links-btn {
+  background: #0d2a4a;
+  color: #7ab4f0;
+  border-color: #1a4a8a;
+}
+#pmw-check-links-btn:hover {
+  background: #1a3a6a;
+  color: #aad0ff;
+}
+#pmw-check-links-btn.pmw-action-btn--disabled {
+  background: #2a2a2a;
+  color: #666;
+  border-color: #444;
 }
 
 /* ── Primary tabs ───────────────────────────────────────────────── */
@@ -196,6 +224,7 @@
 .pmw-row:hover { background: rgba(255,255,255,0.03); }
 .pmw-row.pmw-external { background: rgba(232,160,32,0.05); }
 .pmw-row.pmw-wildcard { background: rgba(160,112,224,0.05); }
+.pmw-row.pmw-broken   { background: rgba(224,80,80,0.07); }
 
 .pmw-table td { padding: 5px 8px; vertical-align: middle; }
 
@@ -254,5 +283,6 @@
 }
 .pmw-tag--ok     { background: #0d2e0d; color: #5cb85c; }
 .pmw-tag--warn   { background: #2e1e00; color: #e8a020; }
+.pmw-tag--broken { background: #2e0d0d; color: #ff8080; border: 1px solid #5a1a1a; }
 .pmw-tag--copied { background: #0d2e0d; color: #a0ffa0; border: 1px solid #2a6a2a; }
 .pmw-tag--error  { background: #2e0d0d; color: #ff8080; }
