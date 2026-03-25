@@ -34,17 +34,56 @@ function inferType(path) {
   return 'unknown';
 }
 
-/** @param {string} originalPath @returns {string} */
+/**
+ * Sanitizes a filename (without extension) to lowercase kebab-case.
+ * Decodes percent-encoding first so "%20" becomes a hyphen, not "%20".
+ * Strips all characters that are not letters, digits, or hyphens.
+ * Collapses consecutive hyphens and trims leading/trailing hyphens.
+ * @param {string} filename - Bare filename without extension.
+ * @returns {string}
+ */
+function sanitizeFilename(filename) {
+  return decodeURIComponent(filename)
+    .toLowerCase()
+    .replace(/\s+/g, '-')          // spaces → hyphens
+    .replace(/[^a-z0-9-]/g, '-')   // any remaining special char → hyphen
+    .replace(/-{2,}/g, '-')        // collapse consecutive hyphens
+    .replace(/^-+|-+$/g, '');      // trim leading/trailing hyphens
+}
+
+/**
+ * Splits a path into { dir, name, ext } where dir includes trailing slash.
+ * e.g. "assets/maps/map 1(9).mp4" → { dir: "assets/maps/", name: "map 1(9)", ext: ".mp4" }
+ * @param {string} filePath
+ * @returns {{ dir: string, name: string, ext: string }}
+ */
+function splitPath(filePath) {
+  const lastSlash = filePath.lastIndexOf('/');
+  const dir = lastSlash >= 0 ? filePath.slice(0, lastSlash + 1) : '';
+  const base = filePath.slice(lastSlash + 1);
+  const dotIndex = base.lastIndexOf('.');
+  if (dotIndex <= 0) return { dir, name: base, ext: '' };
+  return { dir, name: base.slice(0, dotIndex), ext: base.slice(dotIndex) };
+}
+
+/**
+ * Builds the proposed destination path inside my-assets/, sanitizing the filename.
+ * Directory segments are preserved as-is; only the filename is sanitized.
+ * @param {string} originalPath
+ * @returns {string}
+ */
 function buildProposedPath(originalPath) {
   if (isExternalUrl(originalPath)) {
     try {
       const url = new URL(originalPath);
-      return MY_ASSETS_PREFIX() + 'external' + url.pathname;
+      const { dir, name, ext } = splitPath(url.pathname.replace(/^\//, ''));
+      return MY_ASSETS_PREFIX() + 'external/' + dir + sanitizeFilename(name) + ext.toLowerCase();
     } catch {
-      return MY_ASSETS_PREFIX() + 'external/' + originalPath.replace(/[^a-zA-Z0-9._-]/g, '_');
+      return MY_ASSETS_PREFIX() + 'external/' + sanitizeFilename(originalPath);
     }
   }
-  return MY_ASSETS_PREFIX() + originalPath;
+  const { dir, name, ext } = splitPath(originalPath);
+  return MY_ASSETS_PREFIX() + dir + sanitizeFilename(name) + ext.toLowerCase();
 }
 
 /**
