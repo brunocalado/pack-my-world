@@ -1,14 +1,16 @@
 /**
  * @typedef {Object} AssetEntry
- * @property {string} originalPath
- * @property {string} proposedPath
+ * @property {string} originalPath       - The current path as stored in the document.
+ * @property {string} proposedPath       - Where the file will live after consolidation.
  * @property {'image'|'audio'|'video'|'unknown'} type
  * @property {string} documentName
  * @property {'scene'|'actor'|'item'|'journal'|'playlist'|'macro'|'table'|'compendium'} documentType
- * @property {string|null} documentSubType  - scene: 'background'|'token'|'tile'|'sound'; compendium: pack label
+ * @property {string|null} documentSubType
  * @property {string} documentId
  * @property {boolean} isExternal
  * @property {boolean} isAlreadyInWorld
+ * @property {boolean} isWildcard        - True if this entry was resolved from a wildcard path.
+ * @property {string|null} wildcardPath  - The original wildcard path (e.g. "modules/.../token/Acid*").
  */
 
 const WORLD_PREFIX = () => `worlds/${game.world.id}/`;
@@ -24,6 +26,11 @@ function isAlreadyInWorld(path) {
   return typeof path === 'string' && path.startsWith(WORLD_PREFIX());
 }
 
+/** @param {string} path @returns {boolean} */
+function isWildcardPath(path) {
+  return typeof path === 'string' && path.trimEnd().endsWith('*');
+}
+
 /** @param {string} path @returns {'image'|'audio'|'video'|'unknown'} */
 function inferType(path) {
   if (!path) return 'unknown';
@@ -37,23 +44,20 @@ function inferType(path) {
 /**
  * Sanitizes a filename (without extension) to lowercase kebab-case.
  * Decodes percent-encoding first so "%20" becomes a hyphen, not "%20".
- * Strips all characters that are not letters, digits, or hyphens.
- * Collapses consecutive hyphens and trims leading/trailing hyphens.
- * @param {string} filename - Bare filename without extension.
+ * @param {string} filename
  * @returns {string}
  */
 function sanitizeFilename(filename) {
   return decodeURIComponent(filename)
     .toLowerCase()
-    .replace(/\s+/g, '-')          // spaces → hyphens
-    .replace(/[^a-z0-9-]/g, '-')   // any remaining special char → hyphen
-    .replace(/-{2,}/g, '-')        // collapse consecutive hyphens
-    .replace(/^-+|-+$/g, '');      // trim leading/trailing hyphens
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 /**
- * Splits a path into { dir, name, ext } where dir includes trailing slash.
- * e.g. "assets/maps/map 1(9).mp4" → { dir: "assets/maps/", name: "map 1(9)", ext: ".mp4" }
+ * Splits a path into { dir, name, ext }.
  * @param {string} filePath
  * @returns {{ dir: string, name: string, ext: string }}
  */
@@ -67,8 +71,7 @@ function splitPath(filePath) {
 }
 
 /**
- * Builds the proposed destination path inside my-assets/, sanitizing the filename.
- * Directory segments are preserved as-is; only the filename is sanitized.
+ * Builds the proposed destination path inside my-assets/, sanitizing only the filename.
  * @param {string} originalPath
  * @returns {string}
  */
@@ -87,6 +90,45 @@ function buildProposedPath(originalPath) {
 }
 
 /**
+ * For a wildcard path like "modules/dh/token/Acid-Burrower*", returns the
+ * equivalent wildcard path inside my-assets/ so Foundry can still resolve it.
+ * e.g. → "worlds/<id>/my-assets/modules/dh/token/acid-burrower*"
+ * @param {string} wildcardPath
+ * @returns {string}
+ */
+function buildProposedWildcardPath(wildcardPath) {
+  // Strip trailing * to sanitize the prefix, then restore *.
+  const prefix = wildcardPath.slice(0, -1);
+  const { dir, name } = splitPath(prefix);
+  return MY_ASSETS_PREFIX() + dir + sanitizeFilename(name) + '*';
+}
+
+/**
+ * Resolves a wildcard path to the list of real files it matches using FilePicker.browse.
+ * Returns an empty array if the directory cannot be browsed (permissions, missing folder).
+ * @param {string} wildcardPath - e.g. "modules/dh/token/Acid-Burrower*"
+ * @returns {Promise<string[]>} - Array of resolved file paths.
+ */
+async function resolveWildcard(wildcardPath) {
+  const prefix = wildcardPath.slice(0, -1); // strip trailing *
+  const lastSlash = prefix.lastIndexOf('/');
+  const dir = lastSlash >= 0 ? prefix.slice(0, lastSlash) : '.';
+  const filePrefix = prefix.slice(lastSlash + 1).toLowerCase();
+
+  try {
+    const result = await FilePicker.browse('data', dir);
+    return (result.files ?? []).filter(f => {
+      const filename = f.split('/').pop().toLowerCase();
+      return filename.startsWith(filePrefix);
+    });
+  } catch (err) {
+    console.warn(`Pack My World | Could not browse "${dir}" for wildcard "${wildcardPath}": ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Creates a regular AssetEntry for a concrete file path.
  * @param {string} path
  * @param {string} documentName
  * @param {AssetEntry['documentType']} documentType
@@ -107,7 +149,35 @@ function makeEntry(path, documentName, documentType, documentId, documentSubType
     documentSubType,
     documentId,
     isExternal: isExternalUrl(path),
-    isAlreadyInWorld: isAlreadyInWorld(path)
+    isAlreadyInWorld: isAlreadyInWorld(path),
+    isWildcard: false,
+    wildcardPath: null
+  };
+}
+
+/**
+ * Creates a wildcard-resolved AssetEntry for a single real file found under a wildcard.
+ * @param {string} resolvedFile   - The concrete file path returned by FilePicker.browse.
+ * @param {string} wildcardPath   - The original wildcard path (ends with *).
+ * @param {string} documentName
+ * @param {AssetEntry['documentType']} documentType
+ * @param {string} documentId
+ * @param {string|null} [documentSubType]
+ * @returns {AssetEntry}
+ */
+function makeWildcardEntry(resolvedFile, wildcardPath, documentName, documentType, documentId, documentSubType = null) {
+  return {
+    originalPath: resolvedFile,
+    proposedPath: buildProposedPath(resolvedFile),
+    type: inferType(resolvedFile),
+    documentName,
+    documentType,
+    documentSubType,
+    documentId,
+    isExternal: false,
+    isAlreadyInWorld: isAlreadyInWorld(resolvedFile),
+    isWildcard: true,
+    wildcardPath
   };
 }
 
@@ -120,19 +190,58 @@ function extractImgSrcsFromHtml(html) {
 export class AssetScanner {
   /**
    * Scans all world entities and world compendiums for external asset references.
+   * Wildcard paths are resolved to real files via FilePicker.browse.
    * @returns {Promise<AssetEntry[]>}
    */
   static async scan() {
-    const entries = [];
-    AssetScanner._scanScenes(entries);
-    AssetScanner._scanActors(entries);
-    AssetScanner._scanItems(entries);
-    AssetScanner._scanJournals(entries);
-    AssetScanner._scanPlaylists(entries);
-    AssetScanner._scanMacros(entries);
-    AssetScanner._scanTables(entries);
-    await AssetScanner._scanWorldCompendiums(entries);
-    return entries.filter(e => e !== null);
+    const regularEntries = [];
+
+    AssetScanner._scanScenes(regularEntries);
+    AssetScanner._scanActors(regularEntries);
+    AssetScanner._scanItems(regularEntries);
+    AssetScanner._scanJournals(regularEntries);
+    AssetScanner._scanPlaylists(regularEntries);
+    AssetScanner._scanMacros(regularEntries);
+    AssetScanner._scanTables(regularEntries);
+    await AssetScanner._scanWorldCompendiums(regularEntries);
+
+    // Separate wildcards from concrete paths and resolve them.
+    const concrete = regularEntries.filter(e => e !== null && !isWildcardPath(e.originalPath));
+    const wildcardEntries = regularEntries.filter(e => e !== null && isWildcardPath(e.originalPath));
+
+    const resolved = await AssetScanner._resolveWildcardEntries(wildcardEntries);
+
+    return [...concrete, ...resolved];
+  }
+
+  /**
+   * For each entry whose originalPath is a wildcard, resolves the real files
+   * and returns wildcard AssetEntry objects for each match.
+   * If no files are found the original entry is kept as-is so the user can see it.
+   * @param {AssetEntry[]} wildcardEntries
+   * @returns {Promise<AssetEntry[]>}
+   */
+  static async _resolveWildcardEntries(wildcardEntries) {
+    const results = [];
+    for (const entry of wildcardEntries) {
+      const files = await resolveWildcard(entry.originalPath);
+      if (files.length === 0) {
+        // Keep the unresolved wildcard visible so the user knows it exists.
+        results.push({ ...entry, isWildcard: true, wildcardPath: entry.originalPath });
+      } else {
+        for (const file of files) {
+          results.push(makeWildcardEntry(
+            file,
+            entry.originalPath,
+            entry.documentName,
+            entry.documentType,
+            entry.documentId,
+            entry.documentSubType
+          ));
+        }
+      }
+    }
+    return results;
   }
 
   /** @param {AssetEntry[]} entries */
@@ -221,13 +330,11 @@ export class AssetScanner {
 
   /**
    * Scans world-owned compendium packs only.
-   * documentSubType is set to the pack label so the UI can sub-filter by pack.
    * @param {AssetEntry[]} entries
    * @returns {Promise<void>}
    */
   static async _scanWorldCompendiums(entries) {
     const worldPacks = game.packs.filter(p => p.metadata.packageType === 'world');
-
     for (const pack of worldPacks) {
       const packLabel = pack.metadata.label;
       let documents;
@@ -237,13 +344,10 @@ export class AssetScanner {
         console.warn(`Pack My World | Could not load compendium "${packLabel}": ${err.message}`);
         continue;
       }
-
       const push = (path, label) => {
-        // documentSubType carries the pack label for compendium sub-filtering.
         const e = makeEntry(path, label, 'compendium', pack.collection, packLabel);
         if (e && !e.isAlreadyInWorld) entries.push(e);
       };
-
       for (const doc of documents) {
         const label = `[${packLabel}] ${doc.name}`;
         if (doc.documentName === 'Actor') {

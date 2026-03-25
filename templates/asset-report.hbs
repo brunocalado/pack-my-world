@@ -4,6 +4,8 @@
       <span>Assets found outside world folder: <strong>{{totalFound}}</strong></span>
       <span class="pmw-sep">|</span>
       <span class="pmw-external-count">External URLs (http/https): <strong>{{totalExternal}}</strong></span>
+      <span class="pmw-sep">|</span>
+      <span class="pmw-wildcard-count">Wildcards resolved: <strong>{{totalWildcard}}</strong></span>
     </div>
 
     <div class="pmw-tabs">
@@ -49,10 +51,13 @@
       </thead>
       <tbody>
         {{#each visibleAssets}}
-        <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}}">
+        <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}} {{#if isWildcard}}pmw-wildcard{{/if}}">
           <td class="pmw-doc-name" title="{{documentName}}">{{documentName}}</td>
           <td><span class="pmw-type pmw-type--{{type}}">{{type}}</span></td>
-          <td class="pmw-path pmw-path--original" title="{{originalPath}}">{{originalPath}}</td>
+          <td class="pmw-path pmw-path--original" title="{{originalPath}}">
+            {{originalPath}}
+            {{#if isWildcard}}<span class="pmw-wildcard-badge" title="Resolved from wildcard: {{wildcardPath}}">&#x26A1; wildcard</span>{{/if}}
+          </td>
           <td class="pmw-path pmw-path--proposed" title="{{proposedPath}}">{{proposedPath}}</td>
           <td class="pmw-status">
             {{#if isExternal}}

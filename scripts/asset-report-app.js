@@ -36,7 +36,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._assets = assets;
     this._activeTab = 'scene';
     this._sceneSubFilter = 'all';
-    /** @type {string} Pack label used as compendium sub-filter; 'all' means no filter. */
     this._compendiumSubFilter = 'all';
   }
 
@@ -53,7 +52,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       active: t === this._activeTab
     }));
 
-    // Build scene sub-filters.
     const sceneSubFilters = SCENE_SUB_FILTERS.map(sf => ({
       ...sf,
       active: sf.id === this._sceneSubFilter,
@@ -62,7 +60,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         : grouped['scene'].filter(a => a.documentSubType === sf.id).length
     }));
 
-    // Build compendium sub-filters from unique pack labels found in entries.
     const packLabels = [...new Set(grouped['compendium'].map(a => a.documentSubType).filter(Boolean))].sort();
     const compendiumSubFilters = [
       { id: 'all', label: 'All Packs', active: this._compendiumSubFilter === 'all', count: grouped['compendium'].length },
@@ -74,14 +71,11 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       }))
     ];
 
-    // Apply active filters to determine visible rows.
     let visibleAssets = grouped[this._activeTab] ?? [];
-    if (this._activeTab === 'scene' && this._sceneSubFilter !== 'all') {
+    if (this._activeTab === 'scene' && this._sceneSubFilter !== 'all')
       visibleAssets = visibleAssets.filter(a => a.documentSubType === this._sceneSubFilter);
-    }
-    if (this._activeTab === 'compendium' && this._compendiumSubFilter !== 'all') {
+    if (this._activeTab === 'compendium' && this._compendiumSubFilter !== 'all')
       visibleAssets = visibleAssets.filter(a => a.documentSubType === this._compendiumSubFilter);
-    }
 
     return {
       tabs,
@@ -89,6 +83,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       visibleAssets,
       totalFound: this._assets.length,
       totalExternal: this._assets.filter(a => a.isExternal).length,
+      totalWildcard: this._assets.filter(a => a.isWildcard).length,
       showSceneSubFilters: this._activeTab === 'scene',
       sceneSubFilters,
       showCompendiumSubFilters: this._activeTab === 'compendium',

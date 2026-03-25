@@ -1,22 +1,12 @@
 /* ── Pack My World — Asset Report ─────────────────────────────────── */
 
-/*
-  AppV2 renders: <div id="pack-my-world-report" class="pack-my-world application ...">
-                   <header class="window-header">...</header>
-                   <section class="window-content">  ← this is what we control
-                     <div class="pmw-container">  ← our root element from the HBS part
-*/
-
-/* Make the AppV2 window-content a flex column so our container can fill it. */
 .pack-my-world.application > .window-content {
   display: flex;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
-  /* height is controlled by the application resize; we must not set a fixed height here */
 }
 
-/* Our HBS root must fill the window-content completely. */
 .pmw-container {
   display: flex;
   flex-direction: column;
@@ -41,7 +31,8 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-.pmw-external-count { color: #e8a020; }
+.pmw-external-count  { color: #e8a020; }
+.pmw-wildcard-count  { color: #a070e0; }
 .pmw-sep { opacity: 0.4; }
 
 /* ── Primary tabs ───────────────────────────────────────────────── */
@@ -75,7 +66,7 @@
   border-color: var(--color-border-dark, #444);
 }
 
-/* ── Sub-tabs (scene + compendium) ───────────────────────────────── */
+/* ── Sub-tabs ───────────────────────────────────────────────────── */
 .pmw-sub-tabs {
   display: flex;
   gap: 3px;
@@ -128,7 +119,7 @@
 /* ── Scrollable table area ──────────────────────────────────────── */
 .pmw-table-wrapper {
   flex: 1 1 0;
-  min-height: 0;   /* critical: without this, flex children ignore overflow */
+  min-height: 0;
   overflow-y: auto;
   overflow-x: auto;
 }
@@ -163,7 +154,8 @@
 
 .pmw-row { border-bottom: 1px solid #2a2a2a; }
 .pmw-row:hover { background: rgba(255,255,255,0.03); }
-.pmw-row.pmw-external { background: rgba(232,160,32,0.05); }
+.pmw-row.pmw-external  { background: rgba(232,160,32,0.05); }
+.pmw-row.pmw-wildcard  { background: rgba(160,112,224,0.05); }
 
 .pmw-table td { padding: 5px 8px; vertical-align: middle; }
 
@@ -198,6 +190,19 @@
   color: var(--color-text-light-6, #aaa);
 }
 .pmw-path--proposed { color: #7ab4f0; }
+
+.pmw-wildcard-badge {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #2a1a4a;
+  color: #a070e0;
+  vertical-align: middle;
+  cursor: help;
+}
 
 .pmw-tag {
   font-size: 0.68rem;
