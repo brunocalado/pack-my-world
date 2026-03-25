@@ -25,7 +25,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       title: 'Pack My World — Asset Report',
       resizable: true
     },
-    position: { width: 960, height: 640 }
+    position: { width: 1200, height: 680 }
   };
 
   /** @override */
@@ -49,6 +49,14 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._copying = false;
     /** @type {boolean} True while broken-link check is running. */
     this._checkingLinks = false;
+    /** @type {boolean} True while Fix Broken search is running. */
+    this._fixingBroken = false;
+    /**
+     * Tracks possible-match results for broken assets.
+     * Key: originalPath, Value: { matchPath: string, confirmed: boolean }
+     * @type {Map<string, { matchPath: string, confirmed: boolean }>}
+     */
+    this._possibleMatches = new Map();
   }
 
   /** @override */
@@ -89,11 +97,16 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (this._activeTab === 'compendium' && this._compendiumSubFilter !== 'all')
       visibleAssets = visibleAssets.filter(a => a.documentSubType === this._compendiumSubFilter);
 
-    // Annotate each visible asset with its copy result if Phase 2 has run.
-    const annotated = visibleAssets.map(a => ({
-      ...a,
-      copyStatus: this._copyResults.get(a.originalPath) ?? null
-    }));
+    // Annotate each visible asset with its copy result and possible-match data.
+    const annotated = visibleAssets.map(a => {
+      const match = this._possibleMatches.get(a.originalPath);
+      return {
+        ...a,
+        copyStatus: this._copyResults.get(a.originalPath) ?? null,
+        possibleMatch: match ? match.matchPath : null,
+        matchConfirmed: match ? match.confirmed : false
+      };
+    });
 
     const copyDone = this._copyResults.size > 0;
     const copySuccessCount = [...this._copyResults.values()].filter(v => v === 'success').length;
@@ -101,6 +114,8 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const totalBroken = this._assets.filter(a => a.isBroken).length;
     const linkCheckDone = this._assets.some(a => a.isBroken !== undefined && a.isBroken !== false)
       || (this._assets.length > 0 && this._assets.every(a => a.isBroken !== undefined));
+    const totalPossibleMatches = this._possibleMatches.size;
+    const totalConfirmed = [...this._possibleMatches.values()].filter(v => v.confirmed).length;
 
     return {
       tabs,
@@ -112,6 +127,10 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       totalBroken,
       linkCheckDone,
       checkingLinks: this._checkingLinks,
+      fixingBroken: this._fixingBroken,
+      hasBroken: totalBroken > 0,
+      totalPossibleMatches,
+      totalConfirmed,
       showSceneSubFilters: this._activeTab === 'scene',
       sceneSubFilters,
       showCompendiumSubFilters: this._activeTab === 'compendium',
@@ -152,6 +171,22 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (checkBtn) {
       checkBtn.addEventListener('click', () => this._onCheckLinks());
     }
+
+    const fixBtn = this.element.querySelector('#pmw-fix-broken-btn');
+    if (fixBtn) {
+      fixBtn.addEventListener('click', () => this._onFixBroken());
+    }
+
+    this.element.querySelectorAll('.pmw-confirm-match-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const originalPath = e.currentTarget.dataset.original;
+        const existing = this._possibleMatches.get(originalPath);
+        if (existing) {
+          existing.confirmed = true;
+          this.render();
+        }
+      });
+    });
   }
 
   /**
@@ -161,8 +196,9 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async _onCheckLinks() {
     if (this._checkingLinks) return;
     this._checkingLinks = true;
-    // Reset isBroken on all entries before re-checking.
+    // Reset isBroken and possible matches on all entries before re-checking.
     for (const a of this._assets) a.isBroken = false;
+    this._possibleMatches.clear();
     await this.render();
 
     await checkBrokenLinks(this._assets);
@@ -176,6 +212,89 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     } else {
       ui.notifications.info('Pack My World: No broken links found.');
     }
+  }
+
+  /**
+   * Searches all Foundry Data for files matching broken-link filenames.
+   * Updates _possibleMatches with found candidates.
+   * Does NOT update any entity data — purely visual.
+   * @returns {Promise<void>}
+   */
+  async _onFixBroken() {
+    if (this._fixingBroken) return;
+
+    const brokenAssets = this._assets.filter(a => a.isBroken);
+    if (brokenAssets.length === 0) {
+      ui.notifications.info('Pack My World: No broken links to fix. Run Check Links first.');
+      return;
+    }
+
+    this._fixingBroken = true;
+    await this.render();
+
+    // Build a flat index of all files in Foundry Data by browsing recursively.
+    let allFiles = [];
+    try {
+      allFiles = await this._browseAllFiles('data', '');
+    } catch (err) {
+      console.warn('Pack My World | Fix Broken: could not browse Foundry Data:', err);
+    }
+
+    // Index by filename (basename) for fast lookup.
+    /** @type {Map<string, string[]>} filename → [fullPaths] */
+    const byFilename = new Map();
+    for (const filePath of allFiles) {
+      const basename = filePath.split('/').pop().toLowerCase();
+      if (!byFilename.has(basename)) byFilename.set(basename, []);
+      byFilename.get(basename).push(filePath);
+    }
+
+    let found = 0;
+    for (const asset of brokenAssets) {
+      if (this._possibleMatches.has(asset.originalPath)) continue; // already matched
+      const basename = asset.originalPath.split('/').pop().toLowerCase();
+      const candidates = byFilename.get(basename) ?? [];
+      if (candidates.length > 0) {
+        // Pick the first candidate (closest match by basename).
+        this._possibleMatches.set(asset.originalPath, {
+          matchPath: candidates[0],
+          confirmed: false
+        });
+        found++;
+      }
+    }
+
+    this._fixingBroken = false;
+    await this.render();
+
+    if (found > 0) {
+      ui.notifications.info(`Pack My World: Found ${found} possible match(es) for broken links.`);
+    } else {
+      ui.notifications.warn('Pack My World: No matches found for broken links.');
+    }
+  }
+
+  /**
+   * Recursively browses a source/path and returns all file paths found.
+   * Stops recursion beyond a reasonable depth to avoid timeouts.
+   * @param {string} source
+   * @param {string} dir
+   * @param {number} [depth]
+   * @returns {Promise<string[]>}
+   */
+  async _browseAllFiles(source, dir, depth = 0) {
+    if (depth > 6) return [];
+    const FP = foundry?.applications?.apps?.FilePicker?.implementation ?? FilePicker;
+    let result;
+    try {
+      result = await FP.browse(source, dir || '.');
+    } catch {
+      return [];
+    }
+    const files = result.files ?? [];
+    const dirs = result.dirs ?? [];
+    const nested = await Promise.all(dirs.map(d => this._browseAllFiles(source, d, depth + 1)));
+    return [...files, ...nested.flat()];
   }
 
   /**

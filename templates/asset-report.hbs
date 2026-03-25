@@ -13,6 +13,14 @@
           Broken: <strong>{{totalBroken}}</strong>
         </span>
         {{/if}}
+        {{#if totalPossibleMatches}}
+        <span class="pmw-sep">|</span>
+        <span class="pmw-match-count">Possible Matches: <strong>{{totalPossibleMatches}}</strong></span>
+        {{#if totalConfirmed}}
+        <span class="pmw-sep">|</span>
+        <span class="pmw-confirmed-count">Confirmed: <strong>{{totalConfirmed}}</strong></span>
+        {{/if}}
+        {{/if}}
         {{#if copyDone}}
         <span class="pmw-sep">|</span>
         <span class="pmw-copy-ok">Copied: <strong>{{copySuccessCount}}</strong></span>
@@ -28,6 +36,13 @@
             <i class="fa-solid fa-spinner fa-spin"></i> Checking…
           {{else}}
             <i class="fa-solid fa-link"></i> Check Links
+          {{/if}}
+        </button>
+        <button id="pmw-fix-broken-btn" class="pmw-action-btn pmw-action-btn--fix {{#if fixingBroken}}pmw-action-btn--disabled{{/if}}" {{#if fixingBroken}}disabled{{/if}}>
+          {{#if fixingBroken}}
+            <i class="fa-solid fa-spinner fa-spin"></i> Searching…
+          {{else}}
+            <i class="fa-solid fa-wrench"></i> Fix Broken
           {{/if}}
         </button>
         <button id="pmw-copy-btn" class="pmw-action-btn {{#if copying}}pmw-action-btn--disabled{{/if}}" {{#if copying}}disabled{{/if}}>
@@ -79,11 +94,12 @@
           <th>Current Path</th>
           <th>Expected New Path</th>
           <th>Status</th>
+          <th>Match Found</th>
         </tr>
       </thead>
       <tbody>
         {{#each visibleAssets}}
-        <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}} {{#if isWildcard}}pmw-wildcard{{/if}} {{#if isBroken}}pmw-broken{{/if}}">
+        <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}} {{#if isWildcard}}pmw-wildcard{{/if}} {{#if isBroken}}pmw-broken{{/if}} {{#if matchConfirmed}}pmw-confirmed{{/if}}">
           <td class="pmw-doc-name" title="{{documentName}}">{{documentName}}</td>
           <td><span class="pmw-type pmw-type--{{type}}">{{type}}</span></td>
           <td class="pmw-path pmw-path--original" title="{{originalPath}}">
@@ -92,7 +108,11 @@
           </td>
           <td class="pmw-path pmw-path--proposed" title="{{proposedPath}}">{{proposedPath}}</td>
           <td class="pmw-status">
-            {{#if isBroken}}
+            {{#if matchConfirmed}}
+              <span class="pmw-tag pmw-tag--confirmed">&#x2713; Confirmed</span>
+            {{else if possibleMatch}}
+              <span class="pmw-tag pmw-tag--possible">&#x3F; Possible Match</span>
+            {{else if isBroken}}
               <span class="pmw-tag pmw-tag--broken">&#x2717; Broken</span>
             {{else if copyStatus}}
               {{#if (eq copyStatus 'success')}}
@@ -105,6 +125,18 @@
                 <span class="pmw-tag pmw-tag--warn" title="Will attempt fetch; may fail if CORS is blocked">⚠ External URL</span>
               {{else}}
                 <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
+              {{/if}}
+            {{/if}}
+          </td>
+          <td class="pmw-match-cell">
+            {{#if possibleMatch}}
+              {{#if matchConfirmed}}
+                <span class="pmw-path pmw-path--match" title="{{possibleMatch}}">{{possibleMatch}}</span>
+              {{else}}
+                <span class="pmw-path pmw-path--match" title="{{possibleMatch}}">{{possibleMatch}}</span>
+                <button class="pmw-confirm-match-btn" data-original="{{originalPath}}" title="Confirm this match is correct">
+                  <i class="fa-solid fa-check"></i> Confirm
+                </button>
               {{/if}}
             {{/if}}
           </td>
