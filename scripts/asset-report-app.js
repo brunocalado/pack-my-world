@@ -127,7 +127,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     /** @type {Array<{path:string,tokens:string[]}> | null} */
     this._tokenList = null;
 
-    // Load persisted deny list from game settings (falls back to empty array).
     /** @type {string[]} */
     this._denyPrefixes = this._loadDenyList();
   }
@@ -138,7 +137,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Reads the deny list from game settings.
-   * Returns an array of non-empty trimmed prefix strings.
    * @returns {string[]}
    */
   _loadDenyList() {
@@ -167,37 +165,29 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Opens a DialogV2 that lets the GM edit the deny list.
-   * On confirm the list is saved and the report re-renders.
+   * Uses a single DialogV2.wait; the Save callback reads the textarea value
+   * directly from the dialog element before it closes.
    */
   async _onEditDenyList() {
     const currentRaw = this._denyPrefixes.join('\n');
 
-    const content = await renderTemplate(
-      'modules/pack-my-world/templates/path-deny-list.hbs',
-      { denyList: currentRaw }
-    );
+    // Build HTML inline — avoids the deprecated global renderTemplate.
+    const content = `
+      <div class="pmw-deny-list">
+        <p class="pmw-deny-list__hint">
+          Add one path prefix per line. Assets whose <code>originalPath</code>
+          starts with any of these prefixes will be hidden from the report.<br>
+          <em>Examples: <code>systems/</code> &nbsp;|&nbsp; <code>modules/dh-assets</code></em>
+        </p>
+        <textarea id="pmw-deny-textarea" style="width:100%;height:200px;resize:vertical;font-family:monospace;font-size:12px;"
+          placeholder="systems/&#10;modules/dh-assets">${foundry.utils.escapeHTML(currentRaw)}</textarea>
+      </div>`;
 
-    const confirmed = await foundry.applications.api.DialogV2.confirm({
-      window: { title: 'Pack My World — Path Deny List' },
-      content,
-      yes: { label: 'Save', icon: 'fa-solid fa-floppy-disk' },
-      no:  { label: 'Cancel' },
-      render: (event, html) => {
-        // Make the textarea taller inside the dialog.
-        const ta = html.querySelector('#pmw-deny-textarea');
-        if (ta) ta.style.width = '100%';
-      }
-    });
-
-    if (!confirmed) return;
-
-    // Grab the textarea value from the last rendered dialog DOM.
-    // DialogV2.confirm resolves true/false so we must re-read the setting
-    // via a custom approach: attach the value before the dialog closes.
-    // We use a closure variable updated via the render callback.
-    let rawValue = currentRaw;
-    await foundry.applications.api.DialogV2.wait({
-      window: { title: 'Pack My World — Path Deny List' },
+    const result = await foundry.applications.api.DialogV2.wait({
+      window: {
+        title: 'Pack My World — Path Deny List',
+      },
+      position: { width: 480 },
       content,
       buttons: [
         {
@@ -205,28 +195,30 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
           label: 'Save',
           icon: 'fa-solid fa-floppy-disk',
           default: true,
+          // 'dialog' is the DialogV2 application instance; .element is the root HTMLElement.
           callback: (event, button, dialog) => {
-            rawValue = dialog.querySelector('#pmw-deny-textarea')?.value ?? '';
-            return true;
+            return dialog.element.querySelector('#pmw-deny-textarea')?.value ?? '';
           }
         },
         {
           action: 'cancel',
           label: 'Cancel',
-          callback: () => false
+          callback: () => null
         }
       ]
-    }).then(async (result) => {
-      if (result === 'save') {
-        const prefixes = rawValue
-          .split('\n')
-          .map(l => l.trim())
-          .filter(l => l.length > 0);
-        this._denyPrefixes = prefixes;
-        await this._saveDenyList(prefixes);
-        this.render();
-      }
-    }).catch(() => {});
+    });
+
+    // result is whatever the callback returned: the textarea string or null.
+    if (result === null || result === undefined) return;
+
+    const prefixes = result
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    this._denyPrefixes = prefixes;
+    await this._saveDenyList(prefixes);
+    this.render();
   }
 
   // ---------------------------------------------------------------------------
