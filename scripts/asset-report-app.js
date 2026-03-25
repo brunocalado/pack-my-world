@@ -34,6 +34,21 @@ const TOKEN_THRESHOLD = 0.5;
 const DENY_LIST_SETTING = 'pathDenyList';
 
 /**
+ * Infers the media type of a file from its extension.
+ * Mirrors the logic in asset-scanner.js (which is not exported).
+ * @param {string} path
+ * @returns {'image'|'audio'|'video'|'unknown'}
+ */
+function inferType(path) {
+  if (!path) return 'unknown';
+  const ext = path.split('.').pop().toLowerCase().split('?')[0];
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'avif'].includes(ext)) return 'image';
+  if (['mp3', 'ogg', 'wav', 'flac', 'm4a', 'aac'].includes(ext))          return 'audio';
+  if (['mp4', 'webm', 'ogv'].includes(ext))                                return 'video';
+  return 'unknown';
+}
+
+/**
  * Splits a filename stem into lowercase tokens.
  * Handles kebab-case, snake_case, dot.case, spaces, and camelCase.
  * @param {string} stem
@@ -124,7 +139,11 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._fileIndex = null;
     /** @type {Map<string, string[]> | null} */
     this._stemIndex = null;
-    /** @type {Array<{path:string,tokens:string[]}> | null} */
+    /**
+     * Each entry stores path, tokens, and inferred media type so Phase 3
+     * can restrict matches to the same type as the broken asset.
+     * @type {Array<{path:string, tokens:string[], type: 'image'|'audio'|'video'|'unknown'}> | null}
+     */
     this._tokenList = null;
 
     /** @type {string[]} */
@@ -171,7 +190,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async _onEditDenyList() {
     const currentRaw = this._denyPrefixes.join('\n');
 
-    // Build HTML inline — avoids the deprecated global renderTemplate.
     const content = `
       <div class="pmw-deny-list">
         <p class="pmw-deny-list__hint">
@@ -184,9 +202,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       </div>`;
 
     const result = await foundry.applications.api.DialogV2.wait({
-      window: {
-        title: 'Pack My World — Path Deny List',
-      },
+      window: { title: 'Pack My World — Path Deny List' },
       position: { width: 480 },
       content,
       buttons: [
@@ -195,7 +211,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
           label: 'Save',
           icon: 'fa-solid fa-floppy-disk',
           default: true,
-          // 'dialog' is the DialogV2 application instance; .element is the root HTMLElement.
           callback: (event, button, dialog) => {
             return dialog.element.querySelector('#pmw-deny-textarea')?.value ?? '';
           }
@@ -208,7 +223,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       ]
     });
 
-    // result is whatever the callback returned: the textarea string or null.
     if (result === null || result === undefined) return;
 
     const prefixes = result
@@ -229,7 +243,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async _prepareContext() {
     const tabIds = ['scene', 'actor', 'item', 'journal', 'playlist', 'macro', 'table', 'compendium'];
 
-    // Apply deny list before grouping so counts are accurate.
     const allowedAssets = this._assets.filter(a => !isDenied(a.originalPath, this._denyPrefixes));
     const denyCount = this._assets.length - allowedAssets.length;
 
@@ -523,6 +536,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         const dotIdx = lowerBasename.lastIndexOf('.');
         const stem = dotIdx > 0 ? lowerBasename.slice(0, dotIdx) : lowerBasename;
         const tokens = stemToTokens(stem);
+        const fileType = inferType(filePath);
 
         if (!this._fileIndex.has(lowerBasename)) this._fileIndex.set(lowerBasename, []);
         this._fileIndex.get(lowerBasename).push(filePath);
@@ -530,7 +544,8 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!this._stemIndex.has(stem)) this._stemIndex.set(stem, []);
         this._stemIndex.get(stem).push(filePath);
 
-        if (tokens.length > 0) this._tokenList.push({ path: filePath, tokens });
+        // Store type alongside path and tokens for Phase 3 type filtering.
+        if (tokens.length > 0) this._tokenList.push({ path: filePath, tokens, type: fileType });
       }
     }
 
@@ -543,6 +558,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const dotIdx = lowerBasename.lastIndexOf('.');
       const stem = dotIdx > 0 ? lowerBasename.slice(0, dotIdx) : lowerBasename;
       const assetTokens = stemToTokens(stem);
+      const assetType = inferType(asset.originalPath);
 
       /** @type {Map<string, {score:number, method:string}>} */
       const seen = new Map();
@@ -552,16 +568,21 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!existing || existing.score < score) seen.set(path, { score, method });
       };
 
+      // Phase 1 — exact basename match (any type, already specific enough).
       for (const p of (this._fileIndex.get(lowerBasename) ?? []))
         addCandidate(p, 1.0, 'exact');
 
+      // Phase 2 — same stem, different extension (any type, explicit conversion).
       for (const p of (this._stemIndex.get(stem) ?? [])) {
         if (p.split('/').pop().toLowerCase() !== lowerBasename)
           addCandidate(p, 0.9, 'stem');
       }
 
+      // Phase 3 — token overlap, restricted to same media type.
+      // 'unknown' assets are not filtered so unrecognised extensions still get candidates.
       if (assetTokens.length >= 2) {
         for (const entry of this._tokenList) {
+          if (assetType !== 'unknown' && entry.type !== assetType) continue;
           const sc = tokenScore(assetTokens, entry.tokens);
           if (sc >= TOKEN_THRESHOLD) addCandidate(entry.path, sc * 0.85, 'token');
         }
