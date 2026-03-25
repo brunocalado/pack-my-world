@@ -103,14 +103,13 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const possibleMatch = match ? match.matchPath : null;
       const matchConfirmed = match ? match.confirmed : false;
 
-      // Determine the path the preview icon should use:
-      // - broken with confirmed match  → matchPath
-      // - broken with possible match   → matchPath
-      // - broken, no match             → null (button disabled in template)
-      // - everything else              → originalPath
+      // Preview path resolution:
+      // - broken with match (confirmed or not) → matchPath
+      // - broken, no match                     → null (button disabled in template)
+      // - everything else                      → originalPath
       let previewPath;
       if (a.isBroken) {
-        previewPath = (possibleMatch) ? possibleMatch : null;
+        previewPath = possibleMatch ?? null;
       } else {
         previewPath = a.originalPath;
       }
@@ -209,17 +208,19 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Opens a preview for the given asset path.
-   * Images use Foundry's ImagePopout; everything else opens in a new browser tab.
+   * Images use Foundry V13's namespaced ImagePopout.
+   * Audio/video/unknown open in a new browser tab.
    * @param {string} path
-   * @param {string} type  'image' | 'audio' | 'video' | 'unknown'
+   * @param {'image'|'audio'|'video'|'unknown'} type
    */
   _onPreviewAsset(path, type) {
     if (!path) return;
     if (type === 'image') {
-      const ip = new ImagePopout(path, { title: path.split('/').pop() });
-      ip.render(true);
+      new foundry.applications.apps.ImagePopout({
+        src: path,
+        window: { title: path.split('/').pop() }
+      }).render(true);
     } else {
-      // For audio, video, unknown: open in new tab so the browser handles it natively.
       const url = path.startsWith('http') ? path : `${window.location.origin}/${path}`;
       window.open(url, '_blank');
     }
