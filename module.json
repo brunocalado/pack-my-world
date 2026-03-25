@@ -1,0 +1,28 @@
+{
+  "id": "pack-my-world",
+  "title": "Pack My World",
+
+  "description": "",
+
+  "version": "0.0.1",
+  
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+ 
+  "authors": [
+      {
+          "name": "Mestre Digital"
+      }
+  ],
+
+  "esmodules": [],
+  "styles": [],
+  "languages": [],
+
+  "url": "https://github.com/brunocalado/pack-my-world",
+  "manifest": "https://raw.githubusercontent.com/brunocalado/pack-my-world/main/module.json",
+  "download": "https://codeload.github.com/brunocalado/pack-my-world/zip/main"  
+  
+}
