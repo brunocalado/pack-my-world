@@ -104,6 +104,15 @@ function buildProposedWildcardPath(wildcardPath) {
 }
 
 /**
+ * Returns the FilePicker class, compatible with Foundry v13+ namespaced API
+ * and older versions that expose it as a global.
+ * @returns {typeof FilePicker}
+ */
+function getFilePicker() {
+  return foundry?.applications?.apps?.FilePicker?.implementation ?? FilePicker;
+}
+
+/**
  * Resolves a wildcard path to the list of real files it matches using FilePicker.browse.
  * Returns an empty array if the directory cannot be browsed (permissions, missing folder).
  * @param {string} wildcardPath - e.g. "modules/dh/token/Acid-Burrower*"
@@ -116,7 +125,8 @@ async function resolveWildcard(wildcardPath) {
   const filePrefix = prefix.slice(lastSlash + 1).toLowerCase();
 
   try {
-    const result = await FilePicker.browse('data', dir);
+    const FP = getFilePicker();
+    const result = await FP.browse('data', dir);
     return (result.files ?? []).filter(f => {
       const filename = f.split('/').pop().toLowerCase();
       return filename.startsWith(filePrefix);
