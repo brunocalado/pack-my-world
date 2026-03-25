@@ -54,7 +54,6 @@ function inferType(path) {
  */
 function buildProposedPath(originalPath) {
   if (isExternalUrl(originalPath)) {
-    // Strip protocol and domain, keep only the path portion.
     try {
       const url = new URL(originalPath);
       return MY_ASSETS_PREFIX() + 'external' + url.pathname;
@@ -75,7 +74,7 @@ function buildProposedPath(originalPath) {
  */
 function makeEntry(path, documentName, documentType, documentId) {
   if (!path || typeof path !== 'string' || path.trim() === '') return null;
-  // Ignore Foundry built-in placeholder icons (they are shipped with the core)
+  // Ignore Foundry built-in placeholder icons shipped with core.
   if (path.startsWith('icons/') || path.startsWith('ui/')) return null;
 
   return {
@@ -106,8 +105,7 @@ function extractImgSrcsFromHtml(html) {
  */
 export class AssetScanner {
   /**
-   * Scans all world entities and returns a deduplicated list of asset entries.
-   * Only assets that are NOT already inside this world folder are included.
+   * Scans all world entities and returns a list of asset entries for files outside the world folder.
    * Called by PackMyWorld.Start().
    * @returns {Promise<AssetEntry[]>}
    */
@@ -120,8 +118,6 @@ export class AssetScanner {
     AssetScanner._scanJournals(entries);
     AssetScanner._scanPlaylists(entries);
 
-    // Deduplicate by originalPath + documentId so the same file referenced
-    // from two different documents appears twice (each needs re-linking).
     return entries.filter(e => e !== null);
   }
 
@@ -132,26 +128,24 @@ export class AssetScanner {
     for (const scene of game.scenes) {
       const name = scene.name;
       const id = scene.id;
-      const push = (path) => {
-        const e = makeEntry(path, name, 'scene', id);
+      const push = (path, label) => {
+        const e = makeEntry(path, label ?? name, 'scene', id);
         if (e && !e.isAlreadyInWorld) entries.push(e);
       };
 
       push(scene.background?.src);
+      // Use fog.overlay (V13+); scene.fogOverlay is deprecated since V12.
+      push(scene.fog?.overlay);
       push(scene.foreground);
-      push(scene.fogOverlay);
 
       for (const token of scene.tokens) {
-        const e = makeEntry(token.texture?.src, `${name} › Token: ${token.name}`, 'scene', id);
-        if (e && !e.isAlreadyInWorld) entries.push(e);
+        push(token.texture?.src, `${name} › Token: ${token.name}`);
       }
       for (const tile of scene.tiles) {
-        const e = makeEntry(tile.texture?.src, `${name} › Tile`, 'scene', id);
-        if (e && !e.isAlreadyInWorld) entries.push(e);
+        push(tile.texture?.src, `${name} › Tile`);
       }
       for (const sound of scene.sounds) {
-        const e = makeEntry(sound.path, `${name} › Sound`, 'scene', id);
-        if (e && !e.isAlreadyInWorld) entries.push(e);
+        push(sound.path, `${name} › Sound`);
       }
     }
   }
@@ -186,12 +180,10 @@ export class AssetScanner {
   static _scanJournals(entries) {
     for (const journal of game.journal) {
       for (const page of journal.pages) {
-        // Image pages have a direct src
         if (page.src) {
           const e = makeEntry(page.src, `${journal.name} › ${page.name}`, 'journal', journal.id);
           if (e && !e.isAlreadyInWorld) entries.push(e);
         }
-        // Text pages may embed images in HTML content
         const srcs = extractImgSrcsFromHtml(page.text?.content);
         for (const src of srcs) {
           const e = makeEntry(src, `${journal.name} › ${page.name} (inline)`, 'journal', journal.id);

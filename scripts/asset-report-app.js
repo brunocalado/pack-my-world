@@ -51,22 +51,25 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       grouped[tab] = this._assets.filter(a => a.documentType === tab);
     }
 
-    const totalFound = this._assets.length;
-    const totalExternal = this._assets.filter(a => a.isExternal).length;
+    // Mark which tab is active via a plain object so HBS can check it without a custom helper.
+    const tabObjects = tabs.map(t => ({
+      id: t,
+      label: t.charAt(0).toUpperCase() + t.slice(1),
+      count: grouped[t].length,
+      active: t === this._activeTab
+    }));
 
     return {
-      tabs,
+      tabs: tabObjects,
       activeTab: this._activeTab,
       grouped,
-      totalFound,
-      totalExternal,
-      worldPrefix: `worlds/${game.world.id}/my-assets/`
+      totalFound: this._assets.length,
+      totalExternal: this._assets.filter(a => a.isExternal).length
     };
   }
 
   /** @override */
   _onRender(context, options) {
-    // Attach filter tab click handlers after each render.
     this.element.querySelectorAll('.pmw-tab').forEach(btn => {
       btn.addEventListener('click', (e) => {
         this._activeTab = e.currentTarget.dataset.tab;
