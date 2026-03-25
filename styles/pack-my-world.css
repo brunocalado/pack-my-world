@@ -1,0 +1,180 @@
+/* ── Pack My World — Asset Report UI ─────────────────────────────────── */
+
+.pack-my-world .window-content {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header: summary + tabs */
+.pmw-header {
+  padding: 8px 12px 0;
+  background: var(--color-bg-btn, #1a1a1a);
+  border-bottom: 1px solid var(--color-border-dark, #444);
+}
+
+.pmw-summary {
+  font-size: 0.8rem;
+  color: var(--color-text-light-6, #aaa);
+  margin-bottom: 6px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pmw-external-count {
+  color: #e8a020;
+}
+
+.pmw-sep {
+  opacity: 0.4;
+}
+
+/* Tabs */
+.pmw-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.pmw-tab {
+  all: unset;
+  cursor: pointer;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  border-radius: 4px 4px 0 0;
+  background: var(--color-bg-btn, #2a2a2a);
+  color: var(--color-text-light-6, #aaa);
+  border: 1px solid transparent;
+  border-bottom: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pmw-tab:hover {
+  background: #383838;
+  color: #eee;
+}
+
+.pmw-tab.active {
+  background: var(--color-bg-primary, #111);
+  color: var(--color-text-light-1, #fff);
+  border-color: var(--color-border-dark, #444);
+}
+
+.pmw-badge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  margin-left: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #555;
+  color: #ddd;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.pmw-tab.active .pmw-badge {
+  background: #c07000;
+  color: #fff;
+}
+
+/* Table area */
+.pmw-table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+
+.pmw-empty {
+  color: var(--color-text-light-6, #888);
+  font-style: italic;
+  text-align: center;
+  margin-top: 40px;
+}
+
+.pmw-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.pmw-table thead th {
+  text-align: left;
+  padding: 6px 8px;
+  background: var(--color-bg-btn, #1e1e1e);
+  color: var(--color-text-light-5, #bbb);
+  border-bottom: 1px solid #444;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.pmw-row {
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.pmw-row:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.pmw-row.pmw-external {
+  background: rgba(232, 160, 32, 0.05);
+}
+
+.pmw-table td {
+  padding: 5px 8px;
+  vertical-align: middle;
+}
+
+.pmw-doc-name {
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text-light-2, #ddd);
+}
+
+/* Type badge */
+.pmw-type {
+  white-space: nowrap;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.pmw-type--image { background: #1a3a5a; color: #7ab4f0; }
+.pmw-type--audio { background: #1a3a1a; color: #7acf7a; }
+.pmw-type--video { background: #3a1a3a; color: #cf7acf; }
+.pmw-type--unknown { background: #2a2a2a; color: #888; }
+
+/* Path cells */
+.pmw-path {
+  font-family: monospace;
+  font-size: 0.7rem;
+  word-break: break-all;
+  max-width: 260px;
+  color: var(--color-text-light-6, #aaa);
+}
+.pmw-path--proposed {
+  color: #7ab4f0;
+  opacity: 0.85;
+}
+
+/* Status tags */
+.pmw-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.pmw-tag--ok   { background: #0d2e0d; color: #5cb85c; }
+.pmw-tag--warn { background: #2e1e00; color: #e8a020; }

@@ -1,0 +1,51 @@
+<div class="pmw-header">
+  <div class="pmw-summary">
+    <span>Assets found outside world folder: <strong>{{totalFound}}</strong></span>
+    <span class="pmw-sep">|</span>
+    <span class="pmw-external-count">External URLs (http/https): <strong>{{totalExternal}}</strong></span>
+  </div>
+  <div class="pmw-tabs">
+    {{#each tabs}}
+    <button class="pmw-tab {{#if (eq this ../activeTab)}}active{{/if}}" data-tab="{{this}}">
+      {{this}} <span class="pmw-badge">{{lookup (lookup ../grouped this) 'length'}}</span>
+    </button>
+    {{/each}}
+  </div>
+</div>
+
+<div class="pmw-table-wrapper">
+  {{#with (lookup grouped activeTab)}}
+    {{#if this.length}}
+    <table class="pmw-table">
+      <thead>
+        <tr>
+          <th>Document</th>
+          <th>Type</th>
+          <th>Current Path</th>
+          <th>Expected New Path</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each this}}
+        <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}}">
+          <td class="pmw-doc-name">{{documentName}}</td>
+          <td class="pmw-type pmw-type--{{type}}">{{type}}</td>
+          <td class="pmw-path pmw-path--original">{{originalPath}}</td>
+          <td class="pmw-path pmw-path--proposed">{{proposedPath}}</td>
+          <td class="pmw-status">
+            {{#if isExternal}}
+              <span class="pmw-tag pmw-tag--warn" title="Will attempt fetch; may fail if CORS is blocked">⚠ External URL</span>
+            {{else}}
+              <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
+            {{/if}}
+          </td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="pmw-empty">No external assets found for this document type.</p>
+    {{/if}}
+  {{/with}}
+</div>

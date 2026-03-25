@@ -2,7 +2,7 @@
   "id": "pack-my-world",
   "title": "Pack My World",
 
-  "description": "",
+  "description": "Scans all world entities for external assets and consolidates them into the world folder.",
 
   "version": "0.0.1",
   
@@ -17,12 +17,11 @@
       }
   ],
 
-  "esmodules": [],
-  "styles": [],
+  "esmodules": ["scripts/pack-my-world.js"],
+  "styles": ["styles/pack-my-world.css"],
   "languages": [],
 
   "url": "https://github.com/brunocalado/pack-my-world",
   "manifest": "https://raw.githubusercontent.com/brunocalado/pack-my-world/main/module.json",
-  "download": "https://codeload.github.com/brunocalado/pack-my-world/zip/main"  
-  
+  "download": "https://codeload.github.com/brunocalado/pack-my-world/zip/main"
 }
