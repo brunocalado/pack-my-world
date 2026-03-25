@@ -4,7 +4,6 @@
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-// Sub-filter options available when the active tab is 'scene'.
 const SCENE_SUB_FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'background', label: 'Backgrounds' },
@@ -13,10 +12,6 @@ const SCENE_SUB_FILTERS = [
   { id: 'sound', label: 'Sounds' }
 ];
 
-/**
- * ApplicationV2-based UI that displays all external world assets grouped by document type.
- * Opened by PackMyWorld.Start() after AssetScanner.scan() completes.
- */
 export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   /** @override */
   static DEFAULT_OPTIONS = {
@@ -27,34 +22,27 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       title: 'Pack My World — Asset Report',
       resizable: true
     },
-    position: {
-      width: 960,
-      height: 640
-    }
+    position: { width: 960, height: 640 }
   };
 
   /** @override */
   static PARTS = {
-    main: {
-      template: 'modules/pack-my-world/templates/asset-report.hbs'
-    }
+    main: { template: 'modules/pack-my-world/templates/asset-report.hbs' }
   };
 
   /** @param {AssetEntry[]} assets */
   constructor(assets) {
     super();
-    /** @type {AssetEntry[]} */
     this._assets = assets;
-    /** @type {string} */
     this._activeTab = 'scene';
-    /** @type {string} Active sub-filter for scene tab. */
     this._sceneSubFilter = 'all';
+    /** @type {string} Pack label used as compendium sub-filter; 'all' means no filter. */
+    this._compendiumSubFilter = 'all';
   }
 
   /** @override */
   async _prepareContext() {
     const tabIds = ['scene', 'actor', 'item', 'journal', 'playlist', 'macro', 'table', 'compendium'];
-
     const grouped = {};
     for (const t of tabIds) grouped[t] = this._assets.filter(a => a.documentType === t);
 
@@ -65,20 +53,35 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       active: t === this._activeTab
     }));
 
-    // Apply scene sub-filter to the visible list.
-    let visibleAssets = grouped[this._activeTab] ?? [];
-    if (this._activeTab === 'scene' && this._sceneSubFilter !== 'all') {
-      visibleAssets = visibleAssets.filter(a => a.documentSubType === this._sceneSubFilter);
-    }
-
+    // Build scene sub-filters.
     const sceneSubFilters = SCENE_SUB_FILTERS.map(sf => ({
       ...sf,
       active: sf.id === this._sceneSubFilter,
-      // Show count for 'all' as total, others filtered.
       count: sf.id === 'all'
         ? grouped['scene'].length
         : grouped['scene'].filter(a => a.documentSubType === sf.id).length
     }));
+
+    // Build compendium sub-filters from unique pack labels found in entries.
+    const packLabels = [...new Set(grouped['compendium'].map(a => a.documentSubType).filter(Boolean))].sort();
+    const compendiumSubFilters = [
+      { id: 'all', label: 'All Packs', active: this._compendiumSubFilter === 'all', count: grouped['compendium'].length },
+      ...packLabels.map(label => ({
+        id: label,
+        label,
+        active: this._compendiumSubFilter === label,
+        count: grouped['compendium'].filter(a => a.documentSubType === label).length
+      }))
+    ];
+
+    // Apply active filters to determine visible rows.
+    let visibleAssets = grouped[this._activeTab] ?? [];
+    if (this._activeTab === 'scene' && this._sceneSubFilter !== 'all') {
+      visibleAssets = visibleAssets.filter(a => a.documentSubType === this._sceneSubFilter);
+    }
+    if (this._activeTab === 'compendium' && this._compendiumSubFilter !== 'all') {
+      visibleAssets = visibleAssets.filter(a => a.documentSubType === this._compendiumSubFilter);
+    }
 
     return {
       tabs,
@@ -87,23 +90,28 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       totalFound: this._assets.length,
       totalExternal: this._assets.filter(a => a.isExternal).length,
       showSceneSubFilters: this._activeTab === 'scene',
-      sceneSubFilters
+      sceneSubFilters,
+      showCompendiumSubFilters: this._activeTab === 'compendium',
+      compendiumSubFilters
     };
   }
 
   /** @override */
   _onRender(context, options) {
     this.element.querySelectorAll('.pmw-tab').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', e => {
         this._activeTab = e.currentTarget.dataset.tab;
         this._sceneSubFilter = 'all';
+        this._compendiumSubFilter = 'all';
         this.render();
       });
     });
 
-    this.element.querySelectorAll('.pmw-sub-tab').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        this._sceneSubFilter = e.currentTarget.dataset.sub;
+    this.element.querySelectorAll('.pmw-sub-tab[data-sub]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const value = e.currentTarget.dataset.sub;
+        if (this._activeTab === 'scene') this._sceneSubFilter = value;
+        else if (this._activeTab === 'compendium') this._compendiumSubFilter = value;
         this.render();
       });
     });

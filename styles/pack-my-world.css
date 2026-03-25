@@ -1,14 +1,31 @@
 /* ── Pack My World — Asset Report ─────────────────────────────────── */
 
-.pack-my-world .window-content {
-  padding: 0;
+/*
+  AppV2 renders: <div id="pack-my-world-report" class="pack-my-world application ...">
+                   <header class="window-header">...</header>
+                   <section class="window-content">  ← this is what we control
+                     <div class="pmw-container">  ← our root element from the HBS part
+*/
+
+/* Make the AppV2 window-content a flex column so our container can fill it. */
+.pack-my-world.application > .window-content {
   display: flex;
   flex-direction: column;
+  padding: 0;
   overflow: hidden;
-  height: 100%;
+  /* height is controlled by the application resize; we must not set a fixed height here */
 }
 
-/* ── Header ──────────────────────────────────────────────────────── */
+/* Our HBS root must fill the window-content completely. */
+.pmw-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
 .pmw-header {
   flex-shrink: 0;
   padding: 8px 12px 0;
@@ -24,11 +41,10 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-
 .pmw-external-count { color: #e8a020; }
 .pmw-sep { opacity: 0.4; }
 
-/* ── Primary tabs ────────────────────────────────────────────────── */
+/* ── Primary tabs ───────────────────────────────────────────────── */
 .pmw-tabs {
   display: flex;
   gap: 3px;
@@ -47,12 +63,11 @@
   color: var(--color-text-light-6, #aaa);
   border: 1px solid transparent;
   border-bottom: none;
-  transition: background 0.15s, color 0.15s;
   display: flex;
   align-items: center;
   gap: 4px;
+  transition: background 0.15s, color 0.15s;
 }
-
 .pmw-tab:hover { background: #383838; color: #eee; }
 .pmw-tab.active {
   background: var(--color-bg-primary, #111);
@@ -60,12 +75,14 @@
   border-color: var(--color-border-dark, #444);
 }
 
-/* ── Scene sub-tabs ──────────────────────────────────────────────── */
+/* ── Sub-tabs (scene + compendium) ───────────────────────────────── */
 .pmw-sub-tabs {
   display: flex;
   gap: 3px;
   padding: 4px 0 0;
   flex-wrap: wrap;
+  max-height: 80px;
+  overflow-y: auto;
 }
 
 .pmw-sub-tab {
@@ -83,6 +100,7 @@
   align-items: center;
   gap: 4px;
   transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
 }
 .pmw-sub-tab:hover { background: #2e2e2e; color: #ccc; }
 .pmw-sub-tab.active {
@@ -107,13 +125,12 @@
 .pmw-badge--sub { background: #2a3a5a; color: #7ab4f0; }
 .pmw-sub-tab.active .pmw-badge--sub { background: #1a4a8a; color: #aad0ff; }
 
-/* ── Scrollable table area ───────────────────────────────────────── */
+/* ── Scrollable table area ──────────────────────────────────────── */
 .pmw-table-wrapper {
   flex: 1 1 0;
+  min-height: 0;   /* critical: without this, flex children ignore overflow */
   overflow-y: auto;
   overflow-x: auto;
-  padding: 0;
-  min-height: 0; /* required for flex children to scroll */
 }
 
 .pmw-empty {

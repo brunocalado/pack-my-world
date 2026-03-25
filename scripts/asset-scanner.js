@@ -5,7 +5,7 @@
  * @property {'image'|'audio'|'video'|'unknown'} type
  * @property {string} documentName
  * @property {'scene'|'actor'|'item'|'journal'|'playlist'|'macro'|'table'|'compendium'} documentType
- * @property {string} [documentSubType]  - For scenes: 'background'|'token'|'tile'|'sound'
+ * @property {string|null} documentSubType  - scene: 'background'|'token'|'tile'|'sound'; compendium: pack label
  * @property {string} documentId
  * @property {boolean} isExternal
  * @property {boolean} isAlreadyInWorld
@@ -52,10 +52,10 @@ function buildProposedPath(originalPath) {
  * @param {string} documentName
  * @param {AssetEntry['documentType']} documentType
  * @param {string} documentId
- * @param {string} [documentSubType]
+ * @param {string|null} [documentSubType]
  * @returns {AssetEntry|null}
  */
-function makeEntry(path, documentName, documentType, documentId, documentSubType) {
+function makeEntry(path, documentName, documentType, documentId, documentSubType = null) {
   if (!path || typeof path !== 'string' || path.trim() === '') return null;
   if (path.startsWith('icons/') || path.startsWith('ui/')) return null;
 
@@ -65,7 +65,7 @@ function makeEntry(path, documentName, documentType, documentId, documentSubType
     type: inferType(path),
     documentName,
     documentType,
-    documentSubType: documentSubType ?? null,
+    documentSubType,
     documentId,
     isExternal: isExternalUrl(path),
     isAlreadyInWorld: isAlreadyInWorld(path)
@@ -85,7 +85,6 @@ export class AssetScanner {
    */
   static async scan() {
     const entries = [];
-
     AssetScanner._scanScenes(entries);
     AssetScanner._scanActors(entries);
     AssetScanner._scanItems(entries);
@@ -94,7 +93,6 @@ export class AssetScanner {
     AssetScanner._scanMacros(entries);
     AssetScanner._scanTables(entries);
     await AssetScanner._scanWorldCompendiums(entries);
-
     return entries.filter(e => e !== null);
   }
 
@@ -107,18 +105,12 @@ export class AssetScanner {
         const e = makeEntry(path, label ?? name, 'scene', id, subType);
         if (e && !e.isAlreadyInWorld) entries.push(e);
       };
-
       push(scene.background?.src, name, 'background');
       push(scene.foreground, `${name} › Foreground`, 'background');
-      // fog.overlay is the V13+ replacement for the deprecated fogOverlay.
       push(scene.fog?.overlay, `${name} › Fog Overlay`, 'background');
-
-      for (const token of scene.tokens)
-        push(token.texture?.src, `${name} › Token: ${token.name}`, 'token');
-      for (const tile of scene.tiles)
-        push(tile.texture?.src, `${name} › Tile`, 'tile');
-      for (const sound of scene.sounds)
-        push(sound.path, `${name} › Sound`, 'sound');
+      for (const token of scene.tokens) push(token.texture?.src, `${name} › Token: ${token.name}`, 'token');
+      for (const tile of scene.tiles) push(tile.texture?.src, `${name} › Tile`, 'tile');
+      for (const sound of scene.sounds) push(sound.path, `${name} › Sound`, 'sound');
     }
   }
 
@@ -182,65 +174,59 @@ export class AssetScanner {
       const eTable = makeEntry(table.img, table.name, 'table', table.id);
       if (eTable && !eTable.isAlreadyInWorld) entries.push(eTable);
       for (const result of table.results) {
-        const e = makeEntry(result.img, `${table.name} › Result: ${result.text}`, 'table', table.id);
+        const e = makeEntry(result.img, `${table.name} › ${result.text}`, 'table', table.id);
         if (e && !e.isAlreadyInWorld) entries.push(e);
       }
     }
   }
 
   /**
-   * Scans all world-owned compendium packs (type: Actor, Item, Scene, JournalEntry, RollTable, Macro).
-   * System and module compendiums are skipped — only world compendiums are in scope.
+   * Scans world-owned compendium packs only.
+   * documentSubType is set to the pack label so the UI can sub-filter by pack.
    * @param {AssetEntry[]} entries
    * @returns {Promise<void>}
    */
   static async _scanWorldCompendiums(entries) {
-    // Only packs owned by this world, not by systems or modules.
     const worldPacks = game.packs.filter(p => p.metadata.packageType === 'world');
 
     for (const pack of worldPacks) {
+      const packLabel = pack.metadata.label;
       let documents;
       try {
         documents = await pack.getDocuments();
       } catch (err) {
-        console.warn(`Pack My World | Could not load compendium "${pack.metadata.label}": ${err.message}`);
+        console.warn(`Pack My World | Could not load compendium "${packLabel}": ${err.message}`);
         continue;
       }
 
-      for (const doc of documents) {
-        const label = `[${pack.metadata.label}] ${doc.name}`;
-        const id = doc.id;
+      const push = (path, label) => {
+        // documentSubType carries the pack label for compendium sub-filtering.
+        const e = makeEntry(path, label, 'compendium', pack.collection, packLabel);
+        if (e && !e.isAlreadyInWorld) entries.push(e);
+      };
 
+      for (const doc of documents) {
+        const label = `[${packLabel}] ${doc.name}`;
         if (doc.documentName === 'Actor') {
-          const push = (path, l) => { const e = makeEntry(path, l ?? label, 'compendium', id); if (e && !e.isAlreadyInWorld) entries.push(e); };
-          push(doc.img);
+          push(doc.img, label);
           push(doc.prototypeToken?.texture?.src, `${label} › Token`);
         } else if (doc.documentName === 'Item') {
-          const e = makeEntry(doc.img, label, 'compendium', id);
-          if (e && !e.isAlreadyInWorld) entries.push(e);
+          push(doc.img, label);
         } else if (doc.documentName === 'Scene') {
-          const push = (path, l, sub) => { const e = makeEntry(path, l, 'compendium', id, sub); if (e && !e.isAlreadyInWorld) entries.push(e); };
-          push(doc.background?.src, label, 'background');
-          for (const token of (doc.tokens ?? [])) push(token.texture?.src, `${label} › Token: ${token.name}`, 'token');
-          for (const tile of (doc.tiles ?? [])) push(tile.texture?.src, `${label} › Tile`, 'tile');
+          push(doc.background?.src, label);
+          for (const t of (doc.tokens ?? [])) push(t.texture?.src, `${label} › Token: ${t.name}`);
+          for (const t of (doc.tiles ?? [])) push(t.texture?.src, `${label} › Tile`);
         } else if (doc.documentName === 'JournalEntry') {
           for (const page of (doc.pages ?? [])) {
-            if (page.src) { const e = makeEntry(page.src, `${label} › ${page.name}`, 'compendium', id); if (e && !e.isAlreadyInWorld) entries.push(e); }
-            for (const src of extractImgSrcsFromHtml(page.text?.content)) {
-              const e = makeEntry(src, `${label} › ${page.name} (inline)`, 'compendium', id);
-              if (e && !e.isAlreadyInWorld) entries.push(e);
-            }
+            if (page.src) push(page.src, `${label} › ${page.name}`);
+            for (const src of extractImgSrcsFromHtml(page.text?.content))
+              push(src, `${label} › ${page.name} (inline)`);
           }
         } else if (doc.documentName === 'RollTable') {
-          const e = makeEntry(doc.img, label, 'compendium', id);
-          if (e && !e.isAlreadyInWorld) entries.push(e);
-          for (const result of (doc.results ?? [])) {
-            const er = makeEntry(result.img, `${label} › ${result.text}`, 'compendium', id);
-            if (er && !er.isAlreadyInWorld) entries.push(er);
-          }
+          push(doc.img, label);
+          for (const r of (doc.results ?? [])) push(r.img, `${label} › ${r.text}`);
         } else if (doc.documentName === 'Macro') {
-          const e = makeEntry(doc.img, label, 'compendium', id);
-          if (e && !e.isAlreadyInWorld) entries.push(e);
+          push(doc.img, label);
         }
       }
     }

@@ -23,6 +23,16 @@
       {{/each}}
     </div>
     {{/if}}
+
+    {{#if showCompendiumSubFilters}}
+    <div class="pmw-sub-tabs pmw-sub-tabs--compendium">
+      {{#each compendiumSubFilters}}
+      <button class="pmw-sub-tab {{#if active}}active{{/if}}" data-sub="{{id}}">
+        {{label}}<span class="pmw-badge pmw-badge--sub">{{count}}</span>
+      </button>
+      {{/each}}
+    </div>
+    {{/if}}
   </div>
 
   <div class="pmw-table-wrapper">
