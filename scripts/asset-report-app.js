@@ -15,11 +15,6 @@ const SCENE_SUB_FILTERS = [
   { id: 'sound', label: 'Sounds' }
 ];
 
-/**
- * Status filter definitions.
- * Each entry has an id used as the filter key and a label shown in the UI.
- * The 'all' entry always shows total count for the current tab.
- */
 const STATUS_FILTERS = [
   { id: 'all',       label: 'All' },
   { id: 'broken',    label: 'Broken' },
@@ -30,7 +25,10 @@ const STATUS_FILTERS = [
   { id: 'external',  label: 'External' },
 ];
 
-/** Derive the status key for a fully-annotated asset. */
+/** Document types that support opening via their sheet/view. Compendium excluded. */
+const OPENABLE_TYPES = new Set(['scene', 'actor', 'item', 'journal', 'macro', 'table', 'playlist']);
+
+/** @param {import('./asset-scanner.js').AssetEntry & { copyStatus, possibleMatch, matchConfirmed }} a */
 function getStatusKey(a) {
   if (a.matchConfirmed)               return 'confirmed';
   if (a.possibleMatch)                return 'possible';
@@ -111,14 +109,12 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       }))
     ];
 
-    // Base list for current tab + sub-filter (before status filter).
     let baseAssets = grouped[this._activeTab] ?? [];
     if (this._activeTab === 'scene' && this._sceneSubFilter !== 'all')
       baseAssets = baseAssets.filter(a => a.documentSubType === this._sceneSubFilter);
     if (this._activeTab === 'compendium' && this._compendiumSubFilter !== 'all')
       baseAssets = baseAssets.filter(a => a.documentSubType === this._compendiumSubFilter);
 
-    // Annotate all base assets so getStatusKey works correctly.
     const annotated = baseAssets.map(a => {
       const match = this._possibleMatches.get(a.originalPath);
       const possibleMatch = match ? match.matchPath : null;
@@ -129,11 +125,11 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         copyStatus: this._copyResults.get(a.originalPath) ?? null,
         possibleMatch,
         matchConfirmed,
-        previewPath
+        previewPath,
+        canOpenDocument: OPENABLE_TYPES.has(a.documentType)
       };
     });
 
-    // Build status filter pills with counts based on annotated base list.
     const statusFilters = STATUS_FILTERS.map(sf => ({
       ...sf,
       active: sf.id === this._statusFilter,
@@ -142,7 +138,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         : annotated.filter(a => getStatusKey(a) === sf.id).length
     }));
 
-    // Apply status filter to produce the final visible list.
     const visibleAssets = this._statusFilter === 'all'
       ? annotated
       : annotated.filter(a => getStatusKey(a) === this._statusFilter);
@@ -211,6 +206,13 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     });
 
+    this.element.querySelectorAll('.pmw-open-doc-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const { id, doctype } = e.currentTarget.dataset;
+        this._onOpenDocument(id, doctype);
+      });
+    });
+
     const copyBtn = this.element.querySelector('#pmw-copy-btn');
     if (copyBtn) copyBtn.addEventListener('click', () => this._onCopyFiles());
 
@@ -238,6 +240,36 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         this._onPreviewAsset(path, type);
       });
     });
+  }
+
+  /**
+   * Opens the Foundry sheet/view for the given document.
+   * Scene uses .view(); everything else uses .sheet.render(true).
+   * Compendium entries are excluded upstream via canOpenDocument.
+   * @param {string} id
+   * @param {string} doctype
+   */
+  _onOpenDocument(id, doctype) {
+    /** @type {foundry.abstract.Document|undefined} */
+    let doc;
+    switch (doctype) {
+      case 'scene':    doc = game.scenes.get(id);    break;
+      case 'actor':    doc = game.actors.get(id);    break;
+      case 'item':     doc = game.items.get(id);     break;
+      case 'journal':  doc = game.journal.get(id);   break;
+      case 'macro':    doc = game.macros.get(id);    break;
+      case 'table':    doc = game.tables.get(id);    break;
+      case 'playlist': doc = game.playlists.get(id); break;
+    }
+    if (!doc) {
+      ui.notifications.warn(`Pack My World: could not find ${doctype} with id "${id}".`);
+      return;
+    }
+    if (doctype === 'scene') {
+      doc.view();
+    } else {
+      doc.sheet.render(true);
+    }
   }
 
   /**

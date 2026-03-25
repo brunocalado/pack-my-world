@@ -107,7 +107,14 @@
       <tbody>
         {{#each visibleAssets}}
         <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}} {{#if isWildcard}}pmw-wildcard{{/if}} {{#if isBroken}}pmw-broken{{/if}} {{#if matchConfirmed}}pmw-confirmed{{/if}}">
-          <td class="pmw-doc-name" title="{{documentName}}">{{documentName}}</td>
+          <td class="pmw-doc-name" title="{{documentName}}">
+            {{#if canOpenDocument}}
+              <button class="pmw-open-doc-btn" data-id="{{documentId}}" data-doctype="{{documentType}}" title="Open {{documentType}}">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              </button>
+            {{/if}}
+            {{documentName}}
+          </td>
           <td><span class="pmw-type pmw-type--{{type}}">{{type}}</span></td>
           <td class="pmw-path pmw-path--original" title="{{originalPath}}">
             {{originalPath}}
@@ -115,7 +122,6 @@
           </td>
           <td class="pmw-path pmw-path--proposed" title="{{proposedPath}}">{{proposedPath}}</td>
           <td class="pmw-status">
-            {{!-- Preview icon first --}}
             {{#if (and isBroken (not possibleMatch) (not matchConfirmed))}}
               <button class="pmw-preview-btn pmw-preview-btn--disabled" disabled title="File not found — cannot preview">
                 <i class="fa-solid fa-magnifying-glass"></i>
@@ -125,7 +131,6 @@
                 <i class="fa-solid fa-magnifying-glass"></i>
               </button>
             {{/if}}
-            {{!-- Status tag --}}
             {{#if matchConfirmed}}
               <span class="pmw-tag pmw-tag--confirmed">&#x2713; Confirmed</span>
             {{else if possibleMatch}}
