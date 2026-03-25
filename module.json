@@ -4,7 +4,7 @@
 
   "description": "Scans all world entities for external assets and consolidates them into the world folder.",
 
-  "version": "0.0.1",
+  "version": "0.0.2",
   
   "compatibility": {
     "minimum": "13",
