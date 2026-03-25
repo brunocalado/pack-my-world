@@ -137,7 +137,7 @@
                 <span class="pmw-match-path" title="{{confirmedPath}}">{{confirmedPath}}</span>
               </div>
 
-            {{!-- === HAS CANDIDATES (not yet confirmed) === --}}
+            {{!-- === HAS CANDIDATES === --}}
             {{else if hasCandidates}}
               <div class="pmw-candidates">
                 {{#each candidates}}
@@ -145,7 +145,6 @@
                   <button class="pmw-preview-btn" data-path="{{path}}" data-type="{{../type}}" title="Preview this candidate">
                     <i class="fa-solid fa-magnifying-glass"></i>
                   </button>
-                  <span class="pmw-candidate-method pmw-candidate-method--{{method}}">{{method}}</span>
                   <span class="pmw-candidate-score">{{scoreLabel}}</span>
                   <span class="pmw-candidate-path" title="{{path}}">{{path}}</span>
                   <button class="pmw-confirm-match-btn" data-original="{{originalPath}}" data-index="{{index}}" title="Confirm this is the correct file">

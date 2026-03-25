@@ -28,6 +28,7 @@ const STATUS_FILTERS = [
 const OPENABLE_TYPES = new Set(['scene', 'actor', 'item', 'journal', 'macro', 'table', 'playlist']);
 
 const MAX_CANDIDATES = 5;
+const TOKEN_THRESHOLD = 0.65;
 
 /**
  * Splits a filename stem into lowercase tokens.
@@ -38,7 +39,6 @@ const MAX_CANDIDATES = 5;
 function stemToTokens(stem) {
   return stem
     .toLowerCase()
-    // split camelCase: "DragonToken" → "Dragon Token"
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .split(/[-_.\s]+/)
     .filter(t => t.length > 1);
@@ -60,7 +60,6 @@ function tokenScore(tokensA, tokensB) {
 
 /**
  * Derives the status key for a fully-annotated asset row.
- * @param {object} a
  */
 function getStatusKey(a) {
   if (a.matchConfirmed)           return 'confirmed';
@@ -106,7 +105,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     /**
      * Key: originalPath
      * Value: {
-     *   candidates: Array<{ path: string, score: number, method: 'exact'|'stem'|'token' }>,
+     *   candidates: Array<{ path: string, score: number, method: string }>,
      *   confirmedIndex: number|null
      * }
      * @type {Map<string, { candidates: Array<{path:string,score:number,method:string}>, confirmedIndex: number|null }>}
@@ -114,6 +113,10 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._possibleMatches = new Map();
     /** @type {Map<string, string[]> | null} */
     this._fileIndex = null;
+    /** @type {Map<string, string[]> | null} */
+    this._stemIndex = null;
+    /** @type {Array<{path:string,tokens:string[]}> | null} */
+    this._tokenList = null;
   }
 
   /** @override */
@@ -160,17 +163,18 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const confirmed = confirmedIndex !== null && match.candidates[confirmedIndex] != null;
       const confirmedPath = confirmed ? match.candidates[confirmedIndex].path : null;
 
-      // Candidates enriched with per-candidate flags for the template.
       const candidates = match ? match.candidates.map((c, i) => ({
         ...c,
         index: i,
         isConfirmed: i === confirmedIndex,
-        scoreLabel: Math.round(c.score * 100) + '%',
+        scoreLabel: 'Match ' + Math.round(c.score * 100) + '%',
         originalPath: a.originalPath
       })) : [];
 
       const hasCandidates = candidates.length > 0;
-      const previewPath = a.isBroken ? (confirmedPath ?? (hasCandidates ? candidates[0].path : null)) : a.originalPath;
+      const previewPath = a.isBroken
+        ? (confirmedPath ?? (hasCandidates ? candidates[0].path : null))
+        : a.originalPath;
 
       return {
         ...a,
@@ -276,7 +280,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const fixBtn = this.element.querySelector('#pmw-fix-broken-btn');
     if (fixBtn) fixBtn.addEventListener('click', () => this._onFixBroken());
 
-    // Confirm a specific candidate by index.
     this.element.querySelectorAll('.pmw-confirm-match-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         const { original, index } = e.currentTarget.dataset;
@@ -288,7 +291,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     });
 
-    // Preview a specific candidate path.
     this.element.querySelectorAll('.pmw-preview-btn:not(.pmw-preview-btn--disabled)').forEach(btn => {
       btn.addEventListener('click', e => {
         const path = e.currentTarget.dataset.path;
@@ -299,7 +301,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   /**
-   * Opens the Foundry sheet/view for the given document.
    * @param {string} id
    * @param {string} doctype
    */
@@ -323,7 +324,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   /**
-   * Opens a preview for the given asset path.
    * @param {string} path
    * @param {'image'|'audio'|'video'|'unknown'} type
    */
@@ -347,6 +347,8 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     for (const a of this._assets) a.isBroken = false;
     this._possibleMatches.clear();
     this._fileIndex = null;
+    this._stemIndex = null;
+    this._tokenList = null;
     this._statusFilter = 'all';
     await this.render();
 
@@ -376,9 +378,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._fixingBroken = true;
     await this.render();
 
-    // Build index if not cached.
-    // Primary key: lowercase basename → [paths]
-    // Secondary key: lowercase stem (no ext) → [paths]
     if (!this._fileIndex) {
       let allFiles = [];
       try {
@@ -387,11 +386,8 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         console.warn('Pack My World | Fix Broken: could not browse Foundry Data:', err);
       }
 
-      /** @type {Map<string, string[]>} keyed by lowercase basename */
       this._fileIndex = new Map();
-      /** @type {Map<string, string[]>} keyed by lowercase stem (no extension) */
       this._stemIndex = new Map();
-      /** @type {Array<{ path: string, tokens: string[] }>} for token search */
       this._tokenList = [];
 
       for (const filePath of allFiles) {
@@ -401,15 +397,12 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         const stem = dotIdx > 0 ? lowerBasename.slice(0, dotIdx) : lowerBasename;
         const tokens = stemToTokens(stem);
 
-        // basename index
         if (!this._fileIndex.has(lowerBasename)) this._fileIndex.set(lowerBasename, []);
         this._fileIndex.get(lowerBasename).push(filePath);
 
-        // stem index
         if (!this._stemIndex.has(stem)) this._stemIndex.set(stem, []);
         this._stemIndex.get(stem).push(filePath);
 
-        // token list
         if (tokens.length > 0) this._tokenList.push({ path: filePath, tokens });
       }
     }
@@ -424,36 +417,34 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const stem = dotIdx > 0 ? lowerBasename.slice(0, dotIdx) : lowerBasename;
       const assetTokens = stemToTokens(stem);
 
-      /** @type {Map<string, {score:number, method:string}>} deduplicated by path */
+      /** @type {Map<string, {score:number, method:string}>} */
       const seen = new Map();
 
       const addCandidate = (path, score, method) => {
         const existing = seen.get(path);
-        // keep highest score if path already found by another method
         if (!existing || existing.score < score) seen.set(path, { score, method });
       };
 
-      // Phase 1 — exact basename match
+      // Phase 1 — exact basename
       for (const p of (this._fileIndex.get(lowerBasename) ?? []))
         addCandidate(p, 1.0, 'exact');
 
-      // Phase 2 — same stem, any extension
+      // Phase 2 — same stem, different extension
       for (const p of (this._stemIndex.get(stem) ?? [])) {
-        const pBasename = p.split('/').pop().toLowerCase();
-        if (pBasename !== lowerBasename) addCandidate(p, 0.9, 'stem');
+        if (p.split('/').pop().toLowerCase() !== lowerBasename)
+          addCandidate(p, 0.9, 'stem');
       }
 
-      // Phase 3 — token overlap (only if we have at least 2 tokens to avoid noise)
+      // Phase 3 — token overlap (threshold raised to TOKEN_THRESHOLD)
       if (assetTokens.length >= 2) {
         for (const entry of this._tokenList) {
           const sc = tokenScore(assetTokens, entry.tokens);
-          if (sc >= 0.5) addCandidate(entry.path, sc * 0.85, 'token');
+          if (sc >= TOKEN_THRESHOLD) addCandidate(entry.path, sc * 0.85, 'token');
         }
       }
 
       if (seen.size === 0) continue;
 
-      // Sort by score desc, cap at MAX_CANDIDATES.
       const candidates = [...seen.entries()]
         .map(([path, { score, method }]) => ({ path, score, method }))
         .sort((a, b) => b.score - a.score)

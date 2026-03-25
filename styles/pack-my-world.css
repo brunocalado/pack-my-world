@@ -340,25 +340,16 @@
   border-color: #1a5a30 !important;
 }
 
-.pmw-candidate-method {
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 3px;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-.pmw-candidate-method--exact { background: #0d2e18; color: #50c878; }
-.pmw-candidate-method--stem  { background: #0d2a4a; color: #7ab4f0; }
-.pmw-candidate-method--token { background: #2e2200; color: #f0c040; }
-
 .pmw-candidate-score {
   font-size: 0.65rem;
-  color: #888;
+  font-weight: 700;
+  color: #999;
   flex-shrink: 0;
-  min-width: 30px;
+  min-width: 58px;
   text-align: right;
+  white-space: nowrap;
 }
+.pmw-candidate:first-child .pmw-candidate-score { color: #c8c8c8; }
 
 .pmw-candidate-path {
   font-family: monospace;
