@@ -11,6 +11,7 @@
  * @property {boolean} isAlreadyInWorld
  * @property {boolean} isWildcard        - True if this entry was resolved from a wildcard path.
  * @property {string|null} wildcardPath  - The original wildcard path (e.g. "modules/.../token/Acid*").
+ * @property {boolean} isBroken          - True if the file returned 404 or could not be fetched.
  */
 
 const WORLD_PREFIX = () => `worlds/${game.world.id}/`;
@@ -138,6 +139,49 @@ async function resolveWildcard(wildcardPath) {
 }
 
 /**
+ * Checks if a single asset URL is reachable.
+ * For local paths, prepends the Foundry base URL.
+ * Returns true if the file is broken (404 or network error).
+ * @param {string} path
+ * @returns {Promise<boolean>}
+ */
+async function checkIsBroken(path) {
+  try {
+    const url = isExternalUrl(path)
+      ? path
+      : `${window.location.origin}/${path}`;
+    const res = await fetch(url, { method: 'HEAD' });
+    return !res.ok;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Checks all entries for broken links in parallel (capped at `concurrency` simultaneous requests).
+ * Mutates each entry's `isBroken` field in place.
+ * Wildcard entries with unresolved paths are skipped (marked false).
+ * @param {AssetEntry[]} entries
+ * @param {number} [concurrency=20]
+ * @returns {Promise<void>}
+ */
+export async function checkBrokenLinks(entries, concurrency = 20) {
+  // Only check concrete, non-already-in-world entries. Skip unresolved wildcards.
+  const toCheck = entries.filter(e => !e.isAlreadyInWorld && !(e.isWildcard && e.wildcardPath === e.originalPath));
+
+  const queue = toCheck.slice();
+  async function worker() {
+    while (queue.length) {
+      const entry = queue.shift();
+      entry.isBroken = await checkIsBroken(entry.originalPath);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, toCheck.length) }, worker);
+  await Promise.all(workers);
+}
+
+/**
  * Creates a regular AssetEntry for a concrete file path.
  * @param {string} path
  * @param {string} documentName
@@ -161,7 +205,8 @@ function makeEntry(path, documentName, documentType, documentId, documentSubType
     isExternal: isExternalUrl(path),
     isAlreadyInWorld: isAlreadyInWorld(path),
     isWildcard: false,
-    wildcardPath: null
+    wildcardPath: null,
+    isBroken: false
   };
 }
 
@@ -187,7 +232,8 @@ function makeWildcardEntry(resolvedFile, wildcardPath, documentName, documentTyp
     isExternal: false,
     isAlreadyInWorld: isAlreadyInWorld(resolvedFile),
     isWildcard: true,
-    wildcardPath
+    wildcardPath,
+    isBroken: false
   };
 }
 

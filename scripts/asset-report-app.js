@@ -3,6 +3,7 @@
  */
 
 import { AssetCopier } from './asset-copier.js';
+import { checkBrokenLinks } from './asset-scanner.js';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -46,6 +47,8 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._copyResults = new Map();
     /** @type {boolean} True while copy is running — disables the Copy Files button. */
     this._copying = false;
+    /** @type {boolean} True while broken-link check is running. */
+    this._checkingLinks = false;
   }
 
   /** @override */
@@ -95,6 +98,9 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const copyDone = this._copyResults.size > 0;
     const copySuccessCount = [...this._copyResults.values()].filter(v => v === 'success').length;
     const copyErrorCount  = [...this._copyResults.values()].filter(v => v === 'error').length;
+    const totalBroken = this._assets.filter(a => a.isBroken).length;
+    const linkCheckDone = this._assets.some(a => a.isBroken !== undefined && a.isBroken !== false)
+      || (this._assets.length > 0 && this._assets.every(a => a.isBroken !== undefined));
 
     return {
       tabs,
@@ -103,6 +109,9 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       totalFound: this._assets.length,
       totalExternal: this._assets.filter(a => a.isExternal).length,
       totalWildcard: this._assets.filter(a => a.isWildcard).length,
+      totalBroken,
+      linkCheckDone,
+      checkingLinks: this._checkingLinks,
       showSceneSubFilters: this._activeTab === 'scene',
       sceneSubFilters,
       showCompendiumSubFilters: this._activeTab === 'compendium',
@@ -137,6 +146,35 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const copyBtn = this.element.querySelector('#pmw-copy-btn');
     if (copyBtn) {
       copyBtn.addEventListener('click', () => this._onCopyFiles());
+    }
+
+    const checkBtn = this.element.querySelector('#pmw-check-links-btn');
+    if (checkBtn) {
+      checkBtn.addEventListener('click', () => this._onCheckLinks());
+    }
+  }
+
+  /**
+   * Runs broken-link detection across all assets.
+   * @returns {Promise<void>}
+   */
+  async _onCheckLinks() {
+    if (this._checkingLinks) return;
+    this._checkingLinks = true;
+    // Reset isBroken on all entries before re-checking.
+    for (const a of this._assets) a.isBroken = false;
+    await this.render();
+
+    await checkBrokenLinks(this._assets);
+
+    this._checkingLinks = false;
+    await this.render();
+
+    const broken = this._assets.filter(a => a.isBroken).length;
+    if (broken > 0) {
+      ui.notifications.warn(`Pack My World: ${broken} broken link(s) found.`);
+    } else {
+      ui.notifications.info('Pack My World: No broken links found.');
     }
   }
 

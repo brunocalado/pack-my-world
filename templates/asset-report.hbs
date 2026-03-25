@@ -7,6 +7,12 @@
         <span class="pmw-external-count">External URLs: <strong>{{totalExternal}}</strong></span>
         <span class="pmw-sep">|</span>
         <span class="pmw-wildcard-count">Wildcards resolved: <strong>{{totalWildcard}}</strong></span>
+        {{#if linkCheckDone}}
+        <span class="pmw-sep">|</span>
+        <span class="pmw-broken-count {{#if totalBroken}}pmw-broken-count--has-broken{{/if}}">
+          Broken: <strong>{{totalBroken}}</strong>
+        </span>
+        {{/if}}
         {{#if copyDone}}
         <span class="pmw-sep">|</span>
         <span class="pmw-copy-ok">Copied: <strong>{{copySuccessCount}}</strong></span>
@@ -16,13 +22,22 @@
         {{/if}}
         {{/if}}
       </div>
-      <button id="pmw-copy-btn" class="pmw-action-btn {{#if copying}}pmw-action-btn--disabled{{/if}}" {{#if copying}}disabled{{/if}}>
-        {{#if copying}}
-          <i class="fa-solid fa-spinner fa-spin"></i> Copying…
-        {{else}}
-          <i class="fa-solid fa-copy"></i> Copy Files
-        {{/if}}
-      </button>
+      <div class="pmw-toolbar-btns">
+        <button id="pmw-check-links-btn" class="pmw-action-btn {{#if checkingLinks}}pmw-action-btn--disabled{{/if}}" {{#if checkingLinks}}disabled{{/if}}>
+          {{#if checkingLinks}}
+            <i class="fa-solid fa-spinner fa-spin"></i> Checking…
+          {{else}}
+            <i class="fa-solid fa-link"></i> Check Links
+          {{/if}}
+        </button>
+        <button id="pmw-copy-btn" class="pmw-action-btn {{#if copying}}pmw-action-btn--disabled{{/if}}" {{#if copying}}disabled{{/if}}>
+          {{#if copying}}
+            <i class="fa-solid fa-spinner fa-spin"></i> Copying…
+          {{else}}
+            <i class="fa-solid fa-copy"></i> Copy Files
+          {{/if}}
+        </button>
+      </div>
     </div>
 
     <div class="pmw-tabs">
@@ -68,7 +83,7 @@
       </thead>
       <tbody>
         {{#each visibleAssets}}
-        <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}} {{#if isWildcard}}pmw-wildcard{{/if}}">
+        <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}} {{#if isWildcard}}pmw-wildcard{{/if}} {{#if isBroken}}pmw-broken{{/if}}">
           <td class="pmw-doc-name" title="{{documentName}}">{{documentName}}</td>
           <td><span class="pmw-type pmw-type--{{type}}">{{type}}</span></td>
           <td class="pmw-path pmw-path--original" title="{{originalPath}}">
@@ -77,7 +92,9 @@
           </td>
           <td class="pmw-path pmw-path--proposed" title="{{proposedPath}}">{{proposedPath}}</td>
           <td class="pmw-status">
-            {{#if copyStatus}}
+            {{#if isBroken}}
+              <span class="pmw-tag pmw-tag--broken">&#x2717; Broken</span>
+            {{else if copyStatus}}
               {{#if (eq copyStatus 'success')}}
                 <span class="pmw-tag pmw-tag--copied">&#x2713; Copied</span>
               {{else}}
