@@ -127,6 +127,16 @@
                 <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
               {{/if}}
             {{/if}}
+            {{!-- Preview icon: disabled only when broken with no match --}}
+            {{#if (and isBroken (not possibleMatch) (not matchConfirmed))}}
+              <button class="pmw-preview-btn pmw-preview-btn--disabled" disabled title="File not found — cannot preview">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </button>
+            {{else}}
+              <button class="pmw-preview-btn" data-path="{{previewPath}}" data-type="{{type}}" title="Preview asset">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </button>
+            {{/if}}
           </td>
           <td class="pmw-match-cell">
             {{#if possibleMatch}}

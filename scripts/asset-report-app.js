@@ -97,14 +97,30 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (this._activeTab === 'compendium' && this._compendiumSubFilter !== 'all')
       visibleAssets = visibleAssets.filter(a => a.documentSubType === this._compendiumSubFilter);
 
-    // Annotate each visible asset with its copy result and possible-match data.
+    // Annotate each visible asset with copy result, possible-match data, and resolved preview path.
     const annotated = visibleAssets.map(a => {
       const match = this._possibleMatches.get(a.originalPath);
+      const possibleMatch = match ? match.matchPath : null;
+      const matchConfirmed = match ? match.confirmed : false;
+
+      // Determine the path the preview icon should use:
+      // - broken with confirmed match  → matchPath
+      // - broken with possible match   → matchPath
+      // - broken, no match             → null (button disabled in template)
+      // - everything else              → originalPath
+      let previewPath;
+      if (a.isBroken) {
+        previewPath = (possibleMatch) ? possibleMatch : null;
+      } else {
+        previewPath = a.originalPath;
+      }
+
       return {
         ...a,
         copyStatus: this._copyResults.get(a.originalPath) ?? null,
-        possibleMatch: match ? match.matchPath : null,
-        matchConfirmed: match ? match.confirmed : false
+        possibleMatch,
+        matchConfirmed,
+        previewPath
       };
     });
 
@@ -163,19 +179,13 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     });
 
     const copyBtn = this.element.querySelector('#pmw-copy-btn');
-    if (copyBtn) {
-      copyBtn.addEventListener('click', () => this._onCopyFiles());
-    }
+    if (copyBtn) copyBtn.addEventListener('click', () => this._onCopyFiles());
 
     const checkBtn = this.element.querySelector('#pmw-check-links-btn');
-    if (checkBtn) {
-      checkBtn.addEventListener('click', () => this._onCheckLinks());
-    }
+    if (checkBtn) checkBtn.addEventListener('click', () => this._onCheckLinks());
 
     const fixBtn = this.element.querySelector('#pmw-fix-broken-btn');
-    if (fixBtn) {
-      fixBtn.addEventListener('click', () => this._onFixBroken());
-    }
+    if (fixBtn) fixBtn.addEventListener('click', () => this._onFixBroken());
 
     this.element.querySelectorAll('.pmw-confirm-match-btn').forEach(btn => {
       btn.addEventListener('click', e => {
@@ -187,6 +197,32 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         }
       });
     });
+
+    this.element.querySelectorAll('.pmw-preview-btn:not(.pmw-preview-btn--disabled)').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const path = e.currentTarget.dataset.path;
+        const type = e.currentTarget.dataset.type;
+        this._onPreviewAsset(path, type);
+      });
+    });
+  }
+
+  /**
+   * Opens a preview for the given asset path.
+   * Images use Foundry's ImagePopout; everything else opens in a new browser tab.
+   * @param {string} path
+   * @param {string} type  'image' | 'audio' | 'video' | 'unknown'
+   */
+  _onPreviewAsset(path, type) {
+    if (!path) return;
+    if (type === 'image') {
+      const ip = new ImagePopout(path, { title: path.split('/').pop() });
+      ip.render(true);
+    } else {
+      // For audio, video, unknown: open in new tab so the browser handles it natively.
+      const url = path.startsWith('http') ? path : `${window.location.origin}/${path}`;
+      window.open(url, '_blank');
+    }
   }
 
   /**
@@ -196,7 +232,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async _onCheckLinks() {
     if (this._checkingLinks) return;
     this._checkingLinks = true;
-    // Reset isBroken and possible matches on all entries before re-checking.
     for (const a of this._assets) a.isBroken = false;
     this._possibleMatches.clear();
     await this.render();
@@ -232,7 +267,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._fixingBroken = true;
     await this.render();
 
-    // Build a flat index of all files in Foundry Data by browsing recursively.
     let allFiles = [];
     try {
       allFiles = await this._browseAllFiles('data', '');
@@ -240,8 +274,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       console.warn('Pack My World | Fix Broken: could not browse Foundry Data:', err);
     }
 
-    // Index by filename (basename) for fast lookup.
-    /** @type {Map<string, string[]>} filename → [fullPaths] */
+    /** @type {Map<string, string[]>} */
     const byFilename = new Map();
     for (const filePath of allFiles) {
       const basename = filePath.split('/').pop().toLowerCase();
@@ -251,15 +284,11 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     let found = 0;
     for (const asset of brokenAssets) {
-      if (this._possibleMatches.has(asset.originalPath)) continue; // already matched
+      if (this._possibleMatches.has(asset.originalPath)) continue;
       const basename = asset.originalPath.split('/').pop().toLowerCase();
       const candidates = byFilename.get(basename) ?? [];
       if (candidates.length > 0) {
-        // Pick the first candidate (closest match by basename).
-        this._possibleMatches.set(asset.originalPath, {
-          matchPath: candidates[0],
-          confirmed: false
-        });
+        this._possibleMatches.set(asset.originalPath, { matchPath: candidates[0], confirmed: false });
         found++;
       }
     }
@@ -276,7 +305,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Recursively browses a source/path and returns all file paths found.
-   * Stops recursion beyond a reasonable depth to avoid timeouts.
    * @param {string} source
    * @param {string} dir
    * @param {number} [depth]
@@ -299,14 +327,11 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Triggered by the Copy Files button.
-   * Shows a confirmation dialog warning about duration, then starts the copy.
-   * Triggered by user action in _onRender.
    * @returns {Promise<void>}
    */
   async _onCopyFiles() {
     if (this._copying) return;
 
-    // Native V13 dialog for confirmation.
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: 'Pack My World — Copy Files' },
       content: `

@@ -293,6 +293,42 @@
   cursor: help;
 }
 
+/* ── Status cell ─────────────────────────────────────────────────── */
+.pmw-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* ── Preview button (magnifier) ────────────────────────────────── */
+.pmw-preview-btn {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  color: #7ab4f0;
+  font-size: 0.75rem;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.pmw-preview-btn:hover {
+  color: #fff;
+  background: rgba(122,180,240,0.15);
+}
+.pmw-preview-btn--disabled {
+  color: #444;
+  cursor: not-allowed;
+}
+.pmw-preview-btn--disabled:hover {
+  color: #444;
+  background: none;
+}
+
 /* ── Match cell ──────────────────────────────────────────────────── */
 .pmw-match-cell {
   display: flex;
