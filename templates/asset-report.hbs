@@ -5,49 +5,58 @@
       <span class="pmw-sep">|</span>
       <span class="pmw-external-count">External URLs (http/https): <strong>{{totalExternal}}</strong></span>
     </div>
+
     <div class="pmw-tabs">
       {{#each tabs}}
       <button class="pmw-tab {{#if active}}active{{/if}}" data-tab="{{id}}">
-        {{label}} <span class="pmw-badge">{{count}}</span>
+        {{label}}<span class="pmw-badge">{{count}}</span>
       </button>
       {{/each}}
     </div>
+
+    {{#if showSceneSubFilters}}
+    <div class="pmw-sub-tabs">
+      {{#each sceneSubFilters}}
+      <button class="pmw-sub-tab {{#if active}}active{{/if}}" data-sub="{{id}}">
+        {{label}}<span class="pmw-badge pmw-badge--sub">{{count}}</span>
+      </button>
+      {{/each}}
+    </div>
+    {{/if}}
   </div>
 
   <div class="pmw-table-wrapper">
-    {{#with (lookup grouped activeTab)}}
-      {{#if this.length}}
-      <table class="pmw-table">
-        <thead>
-          <tr>
-            <th>Document</th>
-            <th>Type</th>
-            <th>Current Path</th>
-            <th>Expected New Path</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{#each this}}
-          <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}}">
-            <td class="pmw-doc-name">{{documentName}}</td>
-            <td><span class="pmw-type pmw-type--{{type}}">{{type}}</span></td>
-            <td class="pmw-path pmw-path--original">{{originalPath}}</td>
-            <td class="pmw-path pmw-path--proposed">{{proposedPath}}</td>
-            <td class="pmw-status">
-              {{#if isExternal}}
-                <span class="pmw-tag pmw-tag--warn" title="Will attempt fetch; may fail if CORS is blocked">⚠ External URL</span>
-              {{else}}
-                <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
-              {{/if}}
-            </td>
-          </tr>
-          {{/each}}
-        </tbody>
-      </table>
-      {{else}}
-      <p class="pmw-empty">No external assets found for this document type.</p>
-      {{/if}}
-    {{/with}}
+    {{#if visibleAssets.length}}
+    <table class="pmw-table">
+      <thead>
+        <tr>
+          <th>Document</th>
+          <th>Type</th>
+          <th>Current Path</th>
+          <th>Expected New Path</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each visibleAssets}}
+        <tr class="pmw-row {{#if isExternal}}pmw-external{{/if}}">
+          <td class="pmw-doc-name" title="{{documentName}}">{{documentName}}</td>
+          <td><span class="pmw-type pmw-type--{{type}}">{{type}}</span></td>
+          <td class="pmw-path pmw-path--original" title="{{originalPath}}">{{originalPath}}</td>
+          <td class="pmw-path pmw-path--proposed" title="{{proposedPath}}">{{proposedPath}}</td>
+          <td class="pmw-status">
+            {{#if isExternal}}
+              <span class="pmw-tag pmw-tag--warn" title="Will attempt fetch; may fail if CORS is blocked">⚠ External URL</span>
+            {{else}}
+              <span class="pmw-tag pmw-tag--ok">✓ Copyable</span>
+            {{/if}}
+          </td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="pmw-empty">No external assets found for this document type.</p>
+    {{/if}}
   </div>
 </div>
