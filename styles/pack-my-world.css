@@ -23,7 +23,6 @@
   border-bottom: 1px solid var(--color-border-dark, #444);
 }
 
-/* Toolbar: summary + action buttons side by side */
 .pmw-toolbar {
   display: flex;
   align-items: center;
@@ -50,7 +49,6 @@
 .pmw-copy-err         { color: #e05050; }
 .pmw-sep { opacity: 0.4; }
 
-/* Action buttons row — always inline, never stacked */
 .pmw-toolbar-btns {
   display: flex;
   flex-direction: row;
@@ -59,7 +57,6 @@
   flex-shrink: 0;
 }
 
-/* Individual action button */
 .pmw-action-btn {
   all: unset;
   cursor: pointer;
@@ -89,7 +86,6 @@
   cursor: not-allowed;
 }
 
-/* Check Links button — blue tint */
 #pmw-check-links-btn {
   background: #0d2a4a;
   color: #7ab4f0;
@@ -105,7 +101,6 @@
   border-color: #444;
 }
 
-/* Fix Broken button — amber/orange tint */
 #pmw-fix-broken-btn {
   background: #3a2200;
   color: #f0c040;
@@ -201,6 +196,94 @@
 .pmw-tab.active .pmw-badge { background: #c07000; color: #fff; }
 .pmw-badge--sub { background: #2a3a5a; color: #7ab4f0; }
 .pmw-sub-tab.active .pmw-badge--sub { background: #1a4a8a; color: #aad0ff; }
+.pmw-badge--status { background: #333; color: #bbb; }
+
+/* ── Status filter pills ───────────────────────────────────────────── */
+.pmw-status-filters {
+  display: flex;
+  gap: 4px;
+  padding: 5px 0 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.pmw-status-filter {
+  all: unset;
+  cursor: pointer;
+  padding: 2px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 12px;
+  border: 1px solid #3a3a3a;
+  background: #1e1e1e;
+  color: #888;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.pmw-status-filter:hover {
+  background: #2a2a2a;
+  color: #ccc;
+  border-color: #555;
+}
+
+/* Active state: neutral (all) */
+.pmw-status-filter--all.active {
+  background: #2a2a2a;
+  color: #eee;
+  border-color: #666;
+}
+.pmw-status-filter--all.active .pmw-badge--status { background: #555; color: #fff; }
+
+/* broken */
+.pmw-status-filter--broken.active {
+  background: #2e0d0d;
+  color: #ff8080;
+  border-color: #5a1a1a;
+}
+.pmw-status-filter--broken.active .pmw-badge--status { background: #5a1a1a; color: #ffb0b0; }
+
+/* possible match */
+.pmw-status-filter--possible.active {
+  background: #2e2200;
+  color: #f0c040;
+  border-color: #7a5000;
+}
+.pmw-status-filter--possible.active .pmw-badge--status { background: #7a5000; color: #ffd870; }
+
+/* confirmed */
+.pmw-status-filter--confirmed.active {
+  background: #0d2e18;
+  color: #50c878;
+  border-color: #1a5a30;
+}
+.pmw-status-filter--confirmed.active .pmw-badge--status { background: #1a5a30; color: #80ffa0; }
+
+/* copyable */
+.pmw-status-filter--copyable.active {
+  background: #0d2e0d;
+  color: #7acf7a;
+  border-color: #2a6a2a;
+}
+.pmw-status-filter--copyable.active .pmw-badge--status { background: #2a6a2a; color: #a0ffa0; }
+
+/* copied */
+.pmw-status-filter--copied.active {
+  background: #0d2e0d;
+  color: #a0ffa0;
+  border-color: #2a6a2a;
+}
+.pmw-status-filter--copied.active .pmw-badge--status { background: #2a6a2a; color: #c0ffc0; }
+
+/* external */
+.pmw-status-filter--external.active {
+  background: #2e1e00;
+  color: #e8a020;
+  border-color: #7a5000;
+}
+.pmw-status-filter--external.active .pmw-badge--status { background: #7a5000; color: #ffd070; }
 
 /* ── Scrollable table area ──────────────────────────────────────── */
 .pmw-table-wrapper {
@@ -238,7 +321,6 @@
   z-index: 1;
 }
 
-/* Status column gets a fixed generous width */
 .pmw-th-status { width: 340px; min-width: 280px; }
 
 .pmw-row { border-bottom: 1px solid #2a2a2a; }
@@ -303,7 +385,6 @@
   flex-wrap: wrap;
 }
 
-/* Possible-match path shown inline in status cell */
 .pmw-match-path {
   font-family: monospace;
   font-size: 0.68rem;

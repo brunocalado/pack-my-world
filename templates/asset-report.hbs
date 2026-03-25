@@ -82,6 +82,14 @@
       {{/each}}
     </div>
     {{/if}}
+
+    <div class="pmw-status-filters">
+      {{#each statusFilters}}
+      <button class="pmw-status-filter pmw-status-filter--{{id}} {{#if active}}active{{/if}}" data-status="{{id}}">
+        {{label}}<span class="pmw-badge pmw-badge--status">{{count}}</span>
+      </button>
+      {{/each}}
+    </div>
   </div>
 
   <div class="pmw-table-wrapper">
@@ -147,7 +155,7 @@
       </tbody>
     </table>
     {{else}}
-    <p class="pmw-empty">No external assets found for this document type.</p>
+    <p class="pmw-empty">No assets match the current filters.</p>
     {{/if}}
   </div>
 </div>

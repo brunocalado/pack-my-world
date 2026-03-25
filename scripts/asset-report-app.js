@@ -15,6 +15,32 @@ const SCENE_SUB_FILTERS = [
   { id: 'sound', label: 'Sounds' }
 ];
 
+/**
+ * Status filter definitions.
+ * Each entry has an id used as the filter key and a label shown in the UI.
+ * The 'all' entry always shows total count for the current tab.
+ */
+const STATUS_FILTERS = [
+  { id: 'all',       label: 'All' },
+  { id: 'broken',    label: 'Broken' },
+  { id: 'possible',  label: 'Possible Match' },
+  { id: 'confirmed', label: 'Confirmed' },
+  { id: 'copyable',  label: 'Copyable' },
+  { id: 'copied',    label: 'Copied' },
+  { id: 'external',  label: 'External' },
+];
+
+/** Derive the status key for a fully-annotated asset. */
+function getStatusKey(a) {
+  if (a.matchConfirmed)               return 'confirmed';
+  if (a.possibleMatch)                return 'possible';
+  if (a.isBroken)                     return 'broken';
+  if (a.copyStatus === 'success')     return 'copied';
+  if (a.copyStatus === 'error')       return 'error';
+  if (a.isExternal)                   return 'external';
+  return 'copyable';
+}
+
 export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   /** @override */
   static DEFAULT_OPTIONS = {
@@ -40,30 +66,16 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._activeTab = 'scene';
     this._sceneSubFilter = 'all';
     this._compendiumSubFilter = 'all';
-    /**
-     * Tracks copy result per originalPath after Phase 2 runs.
-     * @type {Map<string, 'success'|'error'|'skip'>}
-     */
+    /** @type {'all'|'broken'|'possible'|'confirmed'|'copyable'|'copied'|'external'} */
+    this._statusFilter = 'all';
+    /** @type {Map<string, 'success'|'error'|'skip'>} */
     this._copyResults = new Map();
-    /** @type {boolean} True while copy is running — disables the Copy Files button. */
     this._copying = false;
-    /** @type {boolean} True while broken-link check is running. */
     this._checkingLinks = false;
-    /** @type {boolean} True while Fix Broken search is running. */
     this._fixingBroken = false;
-    /**
-     * Tracks possible-match results for broken assets.
-     * Key: originalPath, Value: { matchPath: string, confirmed: boolean }
-     * @type {Map<string, { matchPath: string, confirmed: boolean }>}
-     */
+    /** @type {Map<string, { matchPath: string, confirmed: boolean }>} */
     this._possibleMatches = new Map();
-    /**
-     * In-memory index of all files found in Foundry Data, built on first Fix Broken run.
-     * Keyed by lowercase basename. Null until first browse completes.
-     * Cleared when Check Links reruns (world state may have changed).
-     * Automatically discarded when the window closes (instance is destroyed).
-     * @type {Map<string, string[]> | null}
-     */
+    /** @type {Map<string, string[]> | null} */
     this._fileIndex = null;
   }
 
@@ -99,24 +111,19 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       }))
     ];
 
-    let visibleAssets = grouped[this._activeTab] ?? [];
+    // Base list for current tab + sub-filter (before status filter).
+    let baseAssets = grouped[this._activeTab] ?? [];
     if (this._activeTab === 'scene' && this._sceneSubFilter !== 'all')
-      visibleAssets = visibleAssets.filter(a => a.documentSubType === this._sceneSubFilter);
+      baseAssets = baseAssets.filter(a => a.documentSubType === this._sceneSubFilter);
     if (this._activeTab === 'compendium' && this._compendiumSubFilter !== 'all')
-      visibleAssets = visibleAssets.filter(a => a.documentSubType === this._compendiumSubFilter);
+      baseAssets = baseAssets.filter(a => a.documentSubType === this._compendiumSubFilter);
 
-    const annotated = visibleAssets.map(a => {
+    // Annotate all base assets so getStatusKey works correctly.
+    const annotated = baseAssets.map(a => {
       const match = this._possibleMatches.get(a.originalPath);
       const possibleMatch = match ? match.matchPath : null;
       const matchConfirmed = match ? match.confirmed : false;
-
-      let previewPath;
-      if (a.isBroken) {
-        previewPath = possibleMatch ?? null;
-      } else {
-        previewPath = a.originalPath;
-      }
-
+      const previewPath = a.isBroken ? (possibleMatch ?? null) : a.originalPath;
       return {
         ...a,
         copyStatus: this._copyResults.get(a.originalPath) ?? null,
@@ -125,6 +132,20 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         previewPath
       };
     });
+
+    // Build status filter pills with counts based on annotated base list.
+    const statusFilters = STATUS_FILTERS.map(sf => ({
+      ...sf,
+      active: sf.id === this._statusFilter,
+      count: sf.id === 'all'
+        ? annotated.length
+        : annotated.filter(a => getStatusKey(a) === sf.id).length
+    }));
+
+    // Apply status filter to produce the final visible list.
+    const visibleAssets = this._statusFilter === 'all'
+      ? annotated
+      : annotated.filter(a => getStatusKey(a) === this._statusFilter);
 
     const copyDone = this._copyResults.size > 0;
     const copySuccessCount = [...this._copyResults.values()].filter(v => v === 'success').length;
@@ -138,7 +159,8 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     return {
       tabs,
       activeTab: this._activeTab,
-      visibleAssets: annotated,
+      visibleAssets,
+      statusFilters,
       totalFound: this._assets.length,
       totalExternal: this._assets.filter(a => a.isExternal).length,
       totalWildcard: this._assets.filter(a => a.isWildcard).length,
@@ -167,6 +189,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         this._activeTab = e.currentTarget.dataset.tab;
         this._sceneSubFilter = 'all';
         this._compendiumSubFilter = 'all';
+        this._statusFilter = 'all';
         this.render();
       });
     });
@@ -176,6 +199,14 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         const value = e.currentTarget.dataset.sub;
         if (this._activeTab === 'scene') this._sceneSubFilter = value;
         else if (this._activeTab === 'compendium') this._compendiumSubFilter = value;
+        this._statusFilter = 'all';
+        this.render();
+      });
+    });
+
+    this.element.querySelectorAll('.pmw-status-filter[data-status]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        this._statusFilter = e.currentTarget.dataset.status;
         this.render();
       });
     });
@@ -211,8 +242,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Opens a preview for the given asset path.
-   * Images use Foundry V13's namespaced ImagePopout.
-   * Audio/video/unknown open in a new browser tab.
    * @param {string} path
    * @param {'image'|'audio'|'video'|'unknown'} type
    */
@@ -229,17 +258,14 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
   }
 
-  /**
-   * Runs broken-link detection across all assets.
-   * Also clears the file index so a subsequent Fix Broken reflects the current state.
-   * @returns {Promise<void>}
-   */
+  /** @returns {Promise<void>} */
   async _onCheckLinks() {
     if (this._checkingLinks) return;
     this._checkingLinks = true;
     for (const a of this._assets) a.isBroken = false;
     this._possibleMatches.clear();
-    this._fileIndex = null; // invalidate cache — world state may change between checks
+    this._fileIndex = null;
+    this._statusFilter = 'all';
     await this.render();
 
     await checkBrokenLinks(this._assets);
@@ -255,14 +281,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
   }
 
-  /**
-   * Searches all Foundry Data for files matching broken-link filenames.
-   * Builds and caches a file index on first run; reuses it on subsequent calls
-   * within the same session (window open). Cache is cleared by _onCheckLinks
-   * and discarded automatically when the window closes.
-   * Does NOT update any entity data — purely visual.
-   * @returns {Promise<void>}
-   */
+  /** @returns {Promise<void>} */
   async _onFixBroken() {
     if (this._fixingBroken) return;
 
@@ -275,7 +294,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._fixingBroken = true;
     await this.render();
 
-    // Build index only if not already cached.
     if (!this._fileIndex) {
       let allFiles = [];
       try {
@@ -313,7 +331,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   /**
-   * Recursively browses a source/path and returns all file paths found.
    * @param {string} source
    * @param {string} dir
    * @param {number} [depth]
@@ -334,10 +351,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     return [...files, ...nested.flat()];
   }
 
-  /**
-   * Triggered by the Copy Files button.
-   * @returns {Promise<void>}
-   */
+  /** @returns {Promise<void>} */
   async _onCopyFiles() {
     if (this._copying) return;
 
