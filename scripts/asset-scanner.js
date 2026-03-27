@@ -90,7 +90,9 @@ function buildProposedPath(originalPath) {
       return MY_ASSETS_PREFIX() + 'external/' + sanitizeFilename(originalPath);
     }
   }
-  const { dir, name, ext } = splitPath(originalPath);
+  let decoded = originalPath;
+  try { decoded = decodeURIComponent(originalPath); } catch { /* keep as-is if malformed */ }
+  const { dir, name, ext } = splitPath(decoded);
   return MY_ASSETS_PREFIX() + dir + sanitizeFilename(name) + ext.toLowerCase();
 }
 
@@ -103,7 +105,9 @@ function buildProposedPath(originalPath) {
  */
 function buildProposedWildcardPath(wildcardPath) {
   const prefix = wildcardPath.slice(0, -1);
-  const { dir, name } = splitPath(prefix);
+  let decoded = prefix;
+  try { decoded = decodeURIComponent(prefix); } catch { /* keep as-is if malformed */ }
+  const { dir, name } = splitPath(decoded);
   return MY_ASSETS_PREFIX() + dir + sanitizeFilename(name) + '*';
 }
 
