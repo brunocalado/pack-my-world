@@ -383,7 +383,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
       return {
         ...a,
-        copyStatus: this._copyResults.get(a.originalPath) ?? null,
+        copyStatus: this._copyResults.get(a.originalPath)?.status ?? null,
         candidates,
         hasCandidates,
         matchConfirmed: confirmed,
@@ -406,8 +406,8 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       : annotated.filter(a => getStatusKey(a) === this._statusFilter);
 
     const copyDone = this._copyResults.size > 0;
-    const copySuccessCount = [...this._copyResults.values()].filter(v => v === 'success').length;
-    const copyErrorCount  = [...this._copyResults.values()].filter(v => v === 'error').length;
+    const copySuccessCount = [...this._copyResults.values()].filter(v => v.status === 'success').length;
+    const copyErrorCount  = [...this._copyResults.values()].filter(v => v.status === 'error').length;
     const totalBroken = allowedAssets.filter(a => a.isBroken).length;
     const linkCheckDone = allowedAssets.some(a => a.isBroken !== undefined && a.isBroken !== false)
       || (allowedAssets.length > 0 && allowedAssets.every(a => a.isBroken !== undefined));
@@ -665,17 +665,54 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._copyResults.clear();
     await this.render();
 
-    await AssetCopier.copyAll(this._assets, (originalPath, status) => {
-      this._copyResults.set(originalPath, status);
+    await AssetCopier.copyAll(this._assets, (originalPath, result) => {
+      this._copyResults.set(originalPath, result);
     });
 
     this._copying = false;
     await this.render();
 
-    const successCount = [...this._copyResults.values()].filter(v => v === 'success').length;
-    const errorCount   = [...this._copyResults.values()].filter(v => v === 'error').length;
+    const successCount = [...this._copyResults.values()].filter(v => v.status === 'success').length;
+    const errorCount   = [...this._copyResults.values()].filter(v => v.status === 'error').length;
     ui.notifications.info(
       `Pack My World: Copy complete. ${successCount} copied, ${errorCount} failed.`
     );
+
+    this._downloadCopyReport();
+  }
+
+  /**
+   * Generates and downloads a CSV report of the copy operation.
+   * @returns {void}
+   */
+  _downloadCopyReport() {
+    const BOM = '\uFEFF';
+    const headers = ['Document Type', 'Document Name', 'Asset Type', 'Original Path', 'Destination Path', 'Status', 'Error'];
+    const rows = this._assets
+      .filter(a => !a.isAlreadyInWorld)
+      .map(asset => {
+        const result = this._copyResults.get(asset.originalPath) ?? { status: 'skip', error: null };
+        return [
+          asset.documentType,
+          asset.documentName,
+          asset.type,
+          asset.originalPath,
+          asset.proposedPath,
+          result.status,
+          result.error ?? ''
+        ];
+      });
+
+    const csvContent = BOM + [headers, ...rows]
+      .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pack-my-world-copy-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }

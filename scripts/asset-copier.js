@@ -14,9 +14,9 @@ export class AssetCopier {
    * Reports progress via the browser console.
    *
    * @param {AssetEntry[]} assets - Full list of entries from AssetScanner.scan().
-   * @param {function(string, 'success'|'error'|'skip'): void} onProgress
-   *   Called after each file is processed with the originalPath and result status.
-   * @returns {Promise<Map<string, 'success'|'error'|'skip'>>}
+   * @param {function(string, {status: string, error: string|null}): void} onProgress
+   *   Called after each file is processed with the originalPath and result.
+   * @returns {Promise<Map<string, {status: string, error: string|null}>>}
    *   A map from originalPath to its copy result.
    */
   static async copyAll(assets, onProgress) {
@@ -31,12 +31,13 @@ export class AssetCopier {
 
     for (let i = 0; i < total; i++) {
       const entry = todo[i];
-      const status = await AssetCopier._copyOne(entry);
+      const result = await AssetCopier._copyOne(entry);
 
-      results.set(entry.originalPath, status);
-      onProgress(entry.originalPath, status);
+      results.set(entry.originalPath, result);
+      onProgress(entry.originalPath, result);
 
-      console.log(`Pack My World | [${i + 1}/${total}] ${status.toUpperCase()}: "${entry.originalPath}" → "${entry.proposedPath}"`);
+      const logSuffix = result.error ? ` (${result.error})` : '';
+      console.log(`Pack My World | [${i + 1}/${total}] ${result.status.toUpperCase()}${logSuffix}: "${entry.originalPath}" → "${entry.proposedPath}"`);
     }
 
     console.log(`Pack My World | Copy complete. ${total} asset(s) processed.`);
@@ -48,7 +49,7 @@ export class AssetCopier {
    * Copies a single asset entry to its proposed path.
    * For external URLs, attempts a fetch first — skips silently on CORS failure.
    * @param {AssetEntry} entry
-   * @returns {Promise<'success'|'error'|'skip'>}
+   * @returns {Promise<{status: string, error: string|null}>}
    */
   static async _copyOne(entry) {
     const { originalPath, proposedPath } = entry;
@@ -64,7 +65,7 @@ export class AssetCopier {
       const response = await fetch(fetchUrl);
       if (!response.ok) {
         console.warn(`Pack My World | Fetch failed for "${originalPath}" (HTTP ${response.status}) — skipping.`);
-        return 'error';
+        return { status: 'error', error: `HTTP ${response.status}` };
       }
       const blob = await response.blob();
       const file = new File([blob], destFilename, { type: blob.type });
@@ -73,10 +74,10 @@ export class AssetCopier {
       await AssetCopier._ensureDirectory(destFolder);
 
       await foundry.applications.apps.FilePicker.implementation.upload('data', destFolder, file, {}, { notify: false });
-      return 'success';
+      return { status: 'success', error: null };
     } catch (err) {
       console.warn(`Pack My World | Error copying "${originalPath}": ${err.message}`);
-      return 'error';
+      return { status: 'error', error: err.message };
     }
   }
 
