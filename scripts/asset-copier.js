@@ -4,14 +4,14 @@
 
 /**
  * Handles copying assets from their original locations into the world's my-assets/ folder.
- * Uses FilePicker.upload for each file and SceneNavigation progress bar for feedback.
+ * Uses FilePicker.upload for each file and ui.notifications progress bar for feedback.
  * Does NOT update any document paths — that is Phase 3.
  */
 export class AssetCopier {
   /**
    * Copies all provided asset entries to their proposed paths.
    * Skips entries that are already inside the world folder.
-   * Reports progress via the native Foundry progress bar (SceneNavigation).
+   * Reports progress via the native Foundry notifications progress bar.
    *
    * @param {AssetEntry[]} assets - Full list of entries from AssetScanner.scan().
    * @param {function(string, 'success'|'error'|'skip'): void} onProgress
@@ -25,8 +25,8 @@ export class AssetCopier {
     const results = new Map();
     const total = todo.length;
 
-    // SceneNavigation.displayProgressBar is the V13-native way to show a loading bar.
-    SceneNavigation.displayProgressBar({ label: 'Pack My World: Copying assets…', pct: 0 });
+    // Use ui.notifications progress bar (V13+).
+    const notifId = ui.notifications.notify('Pack My World: Copying assets…', 'info', { progress: true, pct: 0 });
 
     for (let i = 0; i < total; i++) {
       const entry = todo[i];
@@ -36,16 +36,12 @@ export class AssetCopier {
       results.set(entry.originalPath, status);
       onProgress(entry.originalPath, status);
 
-      // Update native progress bar.
-      SceneNavigation.displayProgressBar({
-        label: `Pack My World: Copying assets… (${i + 1}/${total})`,
-        pct
-      });
+      // Update progress notification.
+      ui.notifications.notify(`Pack My World: Copying assets… (${i + 1}/${total})`, 'info', { progress: true, pct, id: notifId });
     }
 
-    // Hide the progress bar after completion.
-    SceneNavigation.displayProgressBar({ label: 'Pack My World: Done.', pct: 100 });
-    setTimeout(() => SceneNavigation.displayProgressBar({ label: '', pct: 0 }), 2000);
+    // Complete progress notification (pct: 100 auto-dismisses).
+    ui.notifications.notify('Pack My World: Done.', 'info', { progress: true, pct: 100, id: notifId });
 
     return results;
   }
