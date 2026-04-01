@@ -133,6 +133,102 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     /** @type {string[]} */
     this._denyPrefixes = this._loadDenyList();
+
+    /**
+     * Scroll position to restore after a partial re-render (e.g. confirm match).
+     * null means "do not restore" (full re-render, let it reset naturally).
+     * @type {number|null}
+     */
+    this._preserveScrollTop = null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scroll preservation helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Saves the current scroll position of the table wrapper so it can be
+   * restored after the next render cycle.
+   */
+  _saveScrollPosition() {
+    const wrapper = this.element?.querySelector('.pmw-table-wrapper');
+    this._preserveScrollTop = wrapper ? wrapper.scrollTop : null;
+  }
+
+  /** @override */
+  _onRender(context, options) {
+    // Restore scroll position if we saved one before this render.
+    if (this._preserveScrollTop !== null) {
+      const wrapper = this.element?.querySelector('.pmw-table-wrapper');
+      if (wrapper) wrapper.scrollTop = this._preserveScrollTop;
+      this._preserveScrollTop = null;
+    }
+
+    this.element.querySelectorAll('.pmw-tab').forEach(btn => {
+      btn.addEventListener('click', e => {
+        this._activeTab = e.currentTarget.dataset.tab;
+        this._sceneSubFilter = 'all';
+        this._compendiumSubFilter = 'all';
+        this._statusFilter = 'all';
+        this.render();
+      });
+    });
+
+    this.element.querySelectorAll('.pmw-sub-tab[data-sub]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const value = e.currentTarget.dataset.sub;
+        if (this._activeTab === 'scene') this._sceneSubFilter = value;
+        else if (this._activeTab === 'compendium') this._compendiumSubFilter = value;
+        this._statusFilter = 'all';
+        this.render();
+      });
+    });
+
+    this.element.querySelectorAll('.pmw-status-filter[data-status]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        this._statusFilter = e.currentTarget.dataset.status;
+        this.render();
+      });
+    });
+
+    this.element.querySelectorAll('.pmw-open-doc-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const { id, doctype } = e.currentTarget.dataset;
+        this._onOpenDocument(id, doctype);
+      });
+    });
+
+    const denyBtn = this.element.querySelector('#pmw-deny-list-btn');
+    if (denyBtn) denyBtn.addEventListener('click', () => this._onEditDenyList());
+
+    const copyBtn = this.element.querySelector('#pmw-copy-btn');
+    if (copyBtn) copyBtn.addEventListener('click', () => this._onCopyFiles());
+
+    const checkBtn = this.element.querySelector('#pmw-check-links-btn');
+    if (checkBtn) checkBtn.addEventListener('click', () => this._onCheckLinks());
+
+    const fixBtn = this.element.querySelector('#pmw-fix-broken-btn');
+    if (fixBtn) fixBtn.addEventListener('click', () => this._onFixBroken());
+
+    this.element.querySelectorAll('.pmw-confirm-match-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const { original, index } = e.currentTarget.dataset;
+        const existing = this._possibleMatches.get(original);
+        if (existing) {
+          existing.confirmedIndex = parseInt(index, 10);
+          this._saveScrollPosition();
+          this.render();
+        }
+      });
+    });
+
+    this.element.querySelectorAll('.pmw-preview-btn:not(.pmw-preview-btn--disabled)').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const path = e.currentTarget.dataset.path;
+        const type = e.currentTarget.dataset.type;
+        this._onPreviewAsset(path, type);
+      });
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -343,78 +439,6 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       copyErrorCount,
       denyCount
     };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Render / event wiring
-  // ---------------------------------------------------------------------------
-
-  /** @override */
-  _onRender(context, options) {
-    this.element.querySelectorAll('.pmw-tab').forEach(btn => {
-      btn.addEventListener('click', e => {
-        this._activeTab = e.currentTarget.dataset.tab;
-        this._sceneSubFilter = 'all';
-        this._compendiumSubFilter = 'all';
-        this._statusFilter = 'all';
-        this.render();
-      });
-    });
-
-    this.element.querySelectorAll('.pmw-sub-tab[data-sub]').forEach(btn => {
-      btn.addEventListener('click', e => {
-        const value = e.currentTarget.dataset.sub;
-        if (this._activeTab === 'scene') this._sceneSubFilter = value;
-        else if (this._activeTab === 'compendium') this._compendiumSubFilter = value;
-        this._statusFilter = 'all';
-        this.render();
-      });
-    });
-
-    this.element.querySelectorAll('.pmw-status-filter[data-status]').forEach(btn => {
-      btn.addEventListener('click', e => {
-        this._statusFilter = e.currentTarget.dataset.status;
-        this.render();
-      });
-    });
-
-    this.element.querySelectorAll('.pmw-open-doc-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        const { id, doctype } = e.currentTarget.dataset;
-        this._onOpenDocument(id, doctype);
-      });
-    });
-
-    const denyBtn = this.element.querySelector('#pmw-deny-list-btn');
-    if (denyBtn) denyBtn.addEventListener('click', () => this._onEditDenyList());
-
-    const copyBtn = this.element.querySelector('#pmw-copy-btn');
-    if (copyBtn) copyBtn.addEventListener('click', () => this._onCopyFiles());
-
-    const checkBtn = this.element.querySelector('#pmw-check-links-btn');
-    if (checkBtn) checkBtn.addEventListener('click', () => this._onCheckLinks());
-
-    const fixBtn = this.element.querySelector('#pmw-fix-broken-btn');
-    if (fixBtn) fixBtn.addEventListener('click', () => this._onFixBroken());
-
-    this.element.querySelectorAll('.pmw-confirm-match-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        const { original, index } = e.currentTarget.dataset;
-        const existing = this._possibleMatches.get(original);
-        if (existing) {
-          existing.confirmedIndex = parseInt(index, 10);
-          this.render();
-        }
-      });
-    });
-
-    this.element.querySelectorAll('.pmw-preview-btn:not(.pmw-preview-btn--disabled)').forEach(btn => {
-      btn.addEventListener('click', e => {
-        const path = e.currentTarget.dataset.path;
-        const type = e.currentTarget.dataset.type;
-        this._onPreviewAsset(path, type);
-      });
-    });
   }
 
   // ---------------------------------------------------------------------------
