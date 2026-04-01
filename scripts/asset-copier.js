@@ -4,14 +4,14 @@
 
 /**
  * Handles copying assets from their original locations into the world's my-assets/ folder.
- * Uses FilePicker.upload for each file and ui.notifications progress bar for feedback.
- * Does NOT update any document paths — that is Phase 3.
+ * Uses foundry.applications.apps.FilePicker.implementation.upload for each file.
+ * Progress is reported in the browser console. Does NOT update any document paths — that is Phase 3.
  */
 export class AssetCopier {
   /**
    * Copies all provided asset entries to their proposed paths.
    * Skips entries that are already inside the world folder.
-   * Reports progress via the native Foundry notifications progress bar.
+   * Reports progress via the browser console.
    *
    * @param {AssetEntry[]} assets - Full list of entries from AssetScanner.scan().
    * @param {function(string, 'success'|'error'|'skip'): void} onProgress
@@ -25,23 +25,21 @@ export class AssetCopier {
     const results = new Map();
     const total = todo.length;
 
-    // Use ui.notifications progress bar (V13+).
-    const notifId = ui.notifications.notify('Pack My World: Copying assets…', 'info', { progress: true, pct: 0 });
+    // Single notification — user follows progress in the browser console.
+    ui.notifications.info('Pack My World: Copying assets… Check the console for progress.');
+    console.log(`Pack My World | Starting copy of ${total} asset(s).`);
 
     for (let i = 0; i < total; i++) {
       const entry = todo[i];
-      const pct = Math.round(((i + 1) / total) * 100);
       const status = await AssetCopier._copyOne(entry);
 
       results.set(entry.originalPath, status);
       onProgress(entry.originalPath, status);
 
-      // Update progress notification.
-      ui.notifications.notify(`Pack My World: Copying assets… (${i + 1}/${total})`, 'info', { progress: true, pct, id: notifId });
+      console.log(`Pack My World | [${i + 1}/${total}] ${status.toUpperCase()}: "${entry.originalPath}" → "${entry.proposedPath}"`);
     }
 
-    // Complete progress notification (pct: 100 auto-dismisses).
-    ui.notifications.notify('Pack My World: Done.', 'info', { progress: true, pct: 100, id: notifId });
+    console.log(`Pack My World | Copy complete. ${total} asset(s) processed.`);
 
     return results;
   }
@@ -74,8 +72,7 @@ export class AssetCopier {
       // Ensure destination directory exists before uploading.
       await AssetCopier._ensureDirectory(destFolder);
 
-      await FilePicker.upload('data', destFolder, file, {}, { notify: false });
-      console.log(`Pack My World | Copied: "${originalPath}" → "${proposedPath}"`);
+      await foundry.applications.apps.FilePicker.implementation.upload('data', destFolder, file, {}, { notify: false });
       return 'success';
     } catch (err) {
       console.warn(`Pack My World | Error copying "${originalPath}": ${err.message}`);
@@ -85,7 +82,7 @@ export class AssetCopier {
 
   /**
    * Recursively ensures that a directory path exists by creating each segment.
-   * FilePicker.createDirectory is idempotent — it will not throw if the folder exists.
+   * FilePicker.implementation.createDirectory is idempotent — it will not throw if the folder exists.
    * @param {string} fullPath - e.g. "worlds/my-world/my-assets/modules/dh/token"
    * @returns {Promise<void>}
    */
@@ -95,9 +92,9 @@ export class AssetCopier {
     for (const segment of segments) {
       current = current ? `${current}/${segment}` : segment;
       try {
-        await FilePicker.createDirectory('data', current);
+        await foundry.applications.apps.FilePicker.implementation.createDirectory('data', current);
       } catch {
-        // Directory likely already exists — FilePicker.createDirectory throws on conflict.
+        // Directory likely already exists — createDirectory throws on conflict.
       }
     }
   }
