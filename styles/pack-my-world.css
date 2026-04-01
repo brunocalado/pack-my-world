@@ -422,5 +422,6 @@
 .pmw-tag--broken    { background: #2e0d0d; color: #ff8080; border: 1px solid #5a1a1a; }
 .pmw-tag--copied    { background: #0d2e0d; color: #a0ffa0; border: 1px solid #2a6a2a; }
 .pmw-tag--error     { background: #2e0d0d; color: #ff8080; }
+.pmw-error-text     { font-size: 0.68rem; color: #ff8080; font-family: monospace; word-break: break-all; flex: 1 1 auto; opacity: 0.85; }
 .pmw-tag--possible  { background: #2e2200; color: #f0c040; border: 1px solid #7a5000; }
 .pmw-tag--confirmed { background: #0d2e18; color: #50c878; border: 1px solid #1a5a30; }

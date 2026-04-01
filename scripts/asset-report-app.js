@@ -111,7 +111,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._sceneSubFilter = 'all';
     this._compendiumSubFilter = 'all';
     this._statusFilter = 'all';
-    /** @type {Map<string, 'success'|'error'|'skip'>} */
+    /** @type {Map<string, 'success'|'error'>} */
     this._copyResults = new Map();
     this._copying = false;
     this._checkingLinks = false;
@@ -384,6 +384,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       return {
         ...a,
         copyStatus: this._copyResults.get(a.originalPath)?.status ?? null,
+        copyError:  this._copyResults.get(a.originalPath)?.error  ?? null,
         candidates,
         hasCandidates,
         matchConfirmed: confirmed,
@@ -408,6 +409,12 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const copyDone = this._copyResults.size > 0;
     const copySuccessCount = [...this._copyResults.values()].filter(v => v.status === 'success').length;
     const copyErrorCount  = [...this._copyResults.values()].filter(v => v.status === 'error').length;
+    const copySkippedBrokenCount = copyDone
+      ? this._assets
+          .filter(a => !a.isAlreadyInWorld && a.isBroken)
+          .filter(a => { const r = this._copyResults.get(a.originalPath); return !r || r.status === 'error'; })
+          .length
+      : 0;
     const totalBroken = allowedAssets.filter(a => a.isBroken).length;
     const linkCheckDone = allowedAssets.some(a => a.isBroken !== undefined && a.isBroken !== false)
       || (allowedAssets.length > 0 && allowedAssets.every(a => a.isBroken !== undefined));
@@ -437,6 +444,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       copyDone,
       copySuccessCount,
       copyErrorCount,
+      copySkippedBrokenCount,
       denyCount
     };
   }
@@ -682,24 +690,41 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   /**
+   * Classifies an asset's state before any copy was attempted.
+   * @param {AssetEntry} asset
+   * @returns {'broken'|'external'|'wildcard'|'copyable'}
+   */
+  _preCopyStatus(asset) {
+    if (asset.isBroken)   return 'broken';
+    if (asset.isExternal) return 'external';
+    if (asset.isWildcard) return 'wildcard';
+    return 'copyable';
+  }
+
+  /**
    * Generates and downloads a CSV report of the copy operation.
    * @returns {void}
    */
   _downloadCopyReport() {
     const BOM = '\uFEFF';
-    const headers = ['Document Type', 'Document Name', 'Asset Type', 'Original Path', 'Destination Path', 'Status', 'Error'];
+    const headers = ['Document Type', 'Document Name', 'Asset Type', 'Pre-Copy Status', 'Original Path', 'Destination Path', 'Status', 'Error'];
     const rows = this._assets
       .filter(a => !a.isAlreadyInWorld)
       .map(asset => {
-        const result = this._copyResults.get(asset.originalPath) ?? { status: 'skip', error: null };
+        const preCopy = this._preCopyStatus(asset);
+        const result  = this._copyResults.get(asset.originalPath) ?? { status: 'not-copied', error: null };
+        const errorNote = (result.status === 'error' && preCopy === 'broken')
+          ? `File was already broken: ${result.error ?? ''}`
+          : (result.error ?? '');
         return [
           asset.documentType,
           asset.documentName,
           asset.type,
+          preCopy,
           asset.originalPath,
           asset.proposedPath,
           result.status,
-          result.error ?? ''
+          errorNote
         ];
       });
 

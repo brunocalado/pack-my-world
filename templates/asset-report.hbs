@@ -28,6 +28,10 @@
         <span class="pmw-sep">|</span>
         <span class="pmw-copy-err">Failed: <strong>{{copyErrorCount}}</strong></span>
         {{/if}}
+        {{#if copySkippedBrokenCount}}
+        <span class="pmw-sep">|</span>
+        <span class="pmw-copy-err" title="These files were already broken (404) before copy was attempted">Skipped (broken): <strong>{{copySkippedBrokenCount}}</strong></span>
+        {{/if}}
         {{/if}}
         {{#if denyCount}}
         <span class="pmw-sep">|</span>
@@ -179,7 +183,10 @@
                 {{#if (eq copyStatus 'success')}}
                   <span class="pmw-tag pmw-tag--copied">&#x2713; Copied</span>
                 {{else}}
-                  <span class="pmw-tag pmw-tag--error">&#x2717; Failed</span>
+                  <span class="pmw-tag pmw-tag--error" {{#if copyError}}title="{{copyError}}"{{/if}}>&#x2717; Failed</span>
+                  {{#if copyError}}
+                    <span class="pmw-error-text" title="{{copyError}}">{{copyError}}</span>
+                  {{/if}}
                 {{/if}}
               </div>
 
