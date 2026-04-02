@@ -22,6 +22,13 @@ jobs:
         id: version
         run: echo "version=$(jq -r .version module.json)" >> $GITHUB_OUTPUT
 
+      - name: Atualizar download URL no module.json
+        run: |
+          VERSION=$(jq -r .version module.json)
+          jq --arg url "https://github.com/brunocalado/pack-my-world/releases/download/v${VERSION}/pack-my-world.zip" \
+            '.download = $url' module.json > module.tmp.json
+          mv module.tmp.json module.json
+
       - name: Criar ZIP do módulo
         run: |
           zip -r pack-my-world.zip . \
@@ -30,12 +37,21 @@ jobs:
             --exclude ".github/*" \
             --exclude "*.zip"
 
+      - name: Extrair notas da versão do CHANGELOG
+        id: notes
+        run: |
+          VERSION=$(jq -r .version module.json)
+          NOTES=$(awk "/^## ${VERSION}/{flag=1; next} /^## /{flag=0} flag" CHANGELOG.md)
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Criar Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ steps.version.outputs.version }}"
           name: "v${{ steps.version.outputs.version }}"
-          body_path: CHANGELOG.md
+          body: ${{ steps.notes.outputs.notes }}
           files: |
             pack-my-world.zip
             module.json
