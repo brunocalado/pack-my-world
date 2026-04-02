@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'module.json'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extrair versão do module.json
+        id: version
+        run: echo "version=$(jq -r .version module.json)" >> $GITHUB_OUTPUT
+
+      - name: Criar ZIP do módulo
+        run: |
+          zip -r pack-my-world.zip . \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "*.zip"
+
+      - name: Criar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "v${{ steps.version.outputs.version }}"
+          body_path: CHANGELOG.md
+          files: |
+            pack-my-world.zip
+            module.json
