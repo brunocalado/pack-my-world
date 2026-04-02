@@ -25,6 +25,7 @@ jobs:
       - name: Criar ZIP do módulo
         run: |
           zip -r pack-my-world.zip . \
+            $(grep -v '^#' .gitignore | grep -v '^$' | sed 's|^|--exclude "|' | sed 's|$|"|' | tr '\n' ' ') \
             --exclude ".git/*" \
             --exclude ".github/*" \
             --exclude "*.zip"
