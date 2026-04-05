@@ -9,24 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Update module.json Version and Download Link
         run: |
-          # Pega a tag do release (ex: v1.1.0)
           TAG="${{ github.event.release.tag_name }}"
-          # Limpa o 'v' para o campo version (ex: 1.1.0)
-          VERSION=${TAG#v}
-          
-          # Atualiza o module.json dinamicamente usando jq
-          # Isso garante que o Foundry reconheça a versão correta dentro do zip
+          VERSION="${TAG#v}"
           jq ".version = \"$VERSION\" | .download = \"https://github.com/${{ github.repository }}/releases/download/$TAG/module.zip\"" module.json > temp.json && mv temp.json module.json
 
       - name: Create Zip
-        run: zip -r ./module.zip module.json scripts/ packs/ styles/ lang/
+        run: zip -r ./module.zip module.json scripts/ styles/ lang/
 
       - name: Update Release with Files
-        id: create_version_release
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
@@ -34,6 +28,6 @@ jobs:
           draft: ${{ github.event.release.draft }}
           prerelease: ${{ github.event.release.prerelease }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: './module.json, ./module.zip'
+          artifacts: "./module.json,./module.zip"
           tag: ${{ github.event.release.tag_name }}
           body: ${{ github.event.release.body }}
