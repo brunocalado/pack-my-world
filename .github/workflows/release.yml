@@ -1,1 +1,39 @@
-bmFtZTogUmVsZWFzZQoKb246CiAgcHVzaDoKICAgIGJyYW5jaGVzOgogICAgICAtIG1haW4KICAgIHBhdGhzOgogICAgICAtICdtb2R1bGUuanNvbicKCnBlcm1pc3Npb25zOgogIGNvbnRlbnRzOiB3cml0ZQoKam9iczoKICByZWxlYXNlOgogICAgcnVucy1vbjogdWJ1bnR1LWxhdGVzdAoKICAgIHN0ZXBzOgogICAgICAtIG5hbWU6IENoZWNrb3V0CiAgICAgICAgdXNlczogYWN0aW9ucy9jaGVja291dEB2NAoKICAgICAgLSBuYW1lOiBFeHRyYWlyIHZlcnNhbyBkbyBtb2R1bGUuanNvbgogICAgICAgIGlkOiB2ZXJzaW9uCiAgICAgICAgcnVuOiBlY2hvICJ2ZXJzaW9uPSQoanEgLXIgLnZlcnNpb24gbW9kdWxlLmpzb24pIiA+PiAkR0lUSFVCX09VVFBVVAoKICAgICAgLSBuYW1lOiBBdHVhbGl6YXIgZG93bmxvYWQgVVJMIG5vIG1vZHVsZS5qc29uCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBWRVJTSU9OPSIkeyB7IHN0ZXBzLnZlcnNpb24ub3V0cHV0cy52ZXJzaW9uIH0gfSIKICAgICAgICAgIGpxIC0tYXJnIHVybCAiaHR0cHM6Ly9naXRodWIuY29tLyR7eyBnaXRodWIucmVwb3NpdG9yeSB9fS9yZWxlYXNlcy9kb3dubG9hZC92JHtWRVJTSU9OfS9wYWNrLW15LXdvcmxkLnppcCIgXAogICAgICAgICAgICAnLmRvd25sb2FkID0gJHVybCcgbW9kdWxlLmpzb24gPiBtb2R1bGUudG1wLmpzb24KICAgICAgICAgIG12IG1vZHVsZS50bXAuanNvbiBtb2R1bGUuanNvbgoKICAgICAgLSBuYW1lOiBDcmlhciBaSVAgZG8gbW9kdWxvCiAgICAgICAgcnVuOiB8CiAgICAgICAgICB6aXAgLXIgcGFjay1teS13b3JsZC56aXAgXAogICAgICAgICAgICBtb2R1bGUuanNvbiBcCiAgICAgICAgICAgIHNjcmlwdHMvIFwKICAgICAgICAgICAgc3R5bGVzLyBcCiAgICAgICAgICAgIHRlbXBsYXRlcy8gXAogICAgICAgICAgICBMSUNFTlNFIFwKICAgICAgICAgICAgUkVBRE1FLm1kIFwKICAgICAgICAgICAgMj4vZGV2L251bGwgfHwgdHJ1ZQoKICAgICAgLSBuYW1lOiBFeHRyYWlyIG5vdGFzIGRhIHZlcnNhbyBkbyBDSEFOR0VMT0cKICAgICAgICBpZDogbm90ZXMKICAgICAgICBydW46IHwKICAgICAgICAgIFZFUlNJT049IiR7eyBzdGVwcy52ZXJzaW9uLm91dHB1dHMudmVyc2lvbiB9fSIKICAgICAgICAgIE5PVEVTPSR7IGF3ayAiL14jIyBcW18ke1ZFUlNJT059X1xdL3tmbGFnPTE7IG5leHR9IC9eLyMjIC97ZmxhZz0wfSBmbGFnIiBDSEFOR0VMT0cubWQgfHwgdHJ1ZTsgfQogICAgICAgICAgaWYgWyAteiAiJE5PVEVTIiBdOyB0aGVuCiAgICAgICAgICAgIE5PVEVTPSJSZWxlYXNlIHYke1ZFUlNJT059IgogICAgICAgICAgZmkKICAgICAgICAgIGVjaG8gIm5vdGVzPDxFT0YiID4+ICRHSVRIVUJfT1VUUFVUCiAgICAgICAgICBlY2hvICIkTk9URVMiID4+ICRHSVRIVUJfT1VUUFVUCiAgICAgICAgICBlY2hvICJFT0YiID4+ICRHSVRIVUJfT1VUUFVUCgogICAgICAtIG5hbWU6IENyaWFyIFJlbGVhc2UKICAgICAgICB1c2VzOiBzb2Z0cHJvcHMvYWN0aW9uLWdoLXJlbGVhc2VAdjIKICAgICAgICB3aXRoOgogICAgICAgICAgdGFnX25hbWU6ICJ2JHt7IHN0ZXBzLnZlcnNpb24ub3V0cHV0cy52ZXJzaW9uIH19IgogICAgICAgICAgbmFtZTogInYke3sgc3RlcHMudmVyc2lvbi5vdXRwdXRzLnZlcnNpb24gfX0iCiAgICAgICAgICBib2R5OiAkeyB7IHN0ZXBzLm5vdGVzLm91dHB1dHMubm90ZXMgfSB9CiAgICAgICAgICBmaWxlczogfAogICAgICAgICAgICBwYWNrLW15LXdvcmxkLnppcAogICAgICAgICAgICBtb2R1bGUuanNvbgogICAgICAgICAgdG9rZW46ICR7eyBzZWNyZXRzLkdJVEhVQl9UT0tFTiB9fQo=
+name: Release Creation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'module.json'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from module.json
+        id: version
+        run: echo "version=$(jq -r .version module.json)" >> $GITHUB_OUTPUT
+
+      - name: Update download URL in module.json
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          jq ".download = \"https://github.com/${{ github.repository }}/releases/download/${TAG}/module.zip\"" module.json > temp.json && mv temp.json module.json
+
+      - name: Create Zip
+        run: zip -r ./module.zip module.json scripts/ styles/ templates/
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "v${{ steps.version.outputs.version }}"
+          name: "v${{ steps.version.outputs.version }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "./module.json,./module.zip"
+          allowUpdates: true
