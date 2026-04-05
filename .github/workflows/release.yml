@@ -1,57 +1,39 @@
-name: Release
+name: Release Creation
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'module.json'
-
-permissions:
-  contents: write
+  release:
+    types: [published]
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
 
-      - name: Extrair versão do module.json
-        id: version
-        run: echo "version=$(jq -r .version module.json)" >> $GITHUB_OUTPUT
-
-      - name: Atualizar download URL no module.json
+      - name: Update module.json Version and Download Link
         run: |
-          VERSION=$(jq -r .version module.json)
-          jq --arg url "https://github.com/brunocalado/pack-my-world/releases/download/v${VERSION}/pack-my-world.zip" \
-            '.download = $url' module.json > module.tmp.json
-          mv module.tmp.json module.json
+          # Pega a tag do release (ex: v1.1.0)
+          TAG="${{ github.event.release.tag_name }}"
+          # Limpa o 'v' para o campo version (ex: 1.1.0)
+          VERSION=${TAG#v}
+          
+          # Atualiza o module.json dinamicamente usando jq
+          # Isso garante que o Foundry reconheça a versão correta dentro do zip
+          jq ".version = \"$VERSION\" | .download = \"https://github.com/${{ github.repository }}/releases/download/$TAG/module.zip\"" module.json > temp.json && mv temp.json module.json
 
-      - name: Criar ZIP do módulo
-        run: |
-          zip -r pack-my-world.zip . \
-            $(grep -v '^#' .gitignore | grep -v '^$' | sed 's|^|--exclude "|' | sed 's|$|"|' | tr '\n' ' ') \
-            --exclude ".git/*" \
-            --exclude ".github/*" \
-            --exclude "*.zip"
+      - name: Create Zip
+        run: zip -r ./module.zip module.json scripts/ packs/ styles/ lang/
 
-      - name: Extrair notas da versão do CHANGELOG
-        id: notes
-        run: |
-          VERSION=$(jq -r .version module.json)
-          NOTES=$(awk "/^## ${VERSION}/{flag=1; next} /^## /{flag=0} flag" CHANGELOG.md)
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Criar Release
-        uses: softprops/action-gh-release@v2
+      - name: Update Release with Files
+        id: create_version_release
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: "v${{ steps.version.outputs.version }}"
-          name: "v${{ steps.version.outputs.version }}"
-          body: ${{ steps.notes.outputs.notes }}
-          files: |
-            pack-my-world.zip
-            module.json
+          allowUpdates: true
+          name: ${{ github.event.release.name }}
+          draft: ${{ github.event.release.draft }}
+          prerelease: ${{ github.event.release.prerelease }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: './module.json, ./module.zip'
+          tag: ${{ github.event.release.tag_name }}
+          body: ${{ github.event.release.body }}
