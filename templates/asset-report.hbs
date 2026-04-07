@@ -33,6 +33,14 @@
         <span class="pmw-copy-err" title="These files were already broken (404) before copy was attempted">Skipped (broken): <strong>{{copySkippedBrokenCount}}</strong></span>
         {{/if}}
         {{/if}}
+        {{#if applyDone}}
+        <span class="pmw-sep">|</span>
+        <span class="pmw-apply-ok">Applied: <strong>{{applySuccessCount}}</strong></span>
+        {{#if applyErrorCount}}
+        <span class="pmw-sep">|</span>
+        <span class="pmw-copy-err">Apply Errors: <strong>{{applyErrorCount}}</strong></span>
+        {{/if}}
+        {{/if}}
         {{#if denyCount}}
         <span class="pmw-sep">|</span>
         <span class="pmw-deny-count" title="Paths hidden by deny list">Denied: <strong>{{denyCount}}</strong></span>
@@ -61,6 +69,19 @@
             <i class="fa-solid fa-spinner fa-spin"></i> Copying…
           {{else}}
             <i class="fa-solid fa-copy"></i> Copy Files
+          {{/if}}
+        </button>
+        <button
+          id="pmw-apply-paths-btn"
+          class="pmw-action-btn pmw-action-btn--apply {{#unless canApplyPaths}}pmw-action-btn--disabled{{/unless}} {{#if applyingPaths}}pmw-action-btn--disabled{{/if}}"
+          {{#unless canApplyPaths}}disabled{{/unless}}
+          {{#if applyingPaths}}disabled{{/if}}
+          title="{{#if canApplyPaths}}Apply new paths to all world documents{{else}}Resolve all broken links before applying paths{{/if}}"
+        >
+          {{#if applyingPaths}}
+            <i class="fa-solid fa-spinner fa-spin"></i> Applying…
+          {{else}}
+            <i class="fa-solid fa-arrow-right-arrow-left"></i> Apply Path Updates
           {{/if}}
         </button>
       </div>

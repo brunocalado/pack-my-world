@@ -4,6 +4,7 @@
 
 import { AssetCopier } from './asset-copier.js';
 import { AssetScanner, checkBrokenLinks, inferType } from './asset-scanner.js';
+import { AssetUpdater } from './asset-updater.js';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -116,6 +117,10 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._copying = false;
     this._checkingLinks = false;
     this._fixingBroken = false;
+    /** @type {boolean} */
+    this._applyingPaths = false;
+    /** @type {Map<string, {status: 'success'|'error', error: string|null}>} */
+    this._applyResults = new Map();
     /**
      * @type {Map<string, { candidates: Array<{path:string,score:number,method:string}>, confirmedIndex: number|null }>}
      */
@@ -209,6 +214,9 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const fixBtn = this.element.querySelector('#pmw-fix-broken-btn');
     if (fixBtn) fixBtn.addEventListener('click', () => this._onFixBroken());
+
+    const applyBtn = this.element.querySelector('#pmw-apply-paths-btn');
+    if (applyBtn) applyBtn.addEventListener('click', () => this._onApplyPaths());
 
     this.element.querySelectorAll('.pmw-confirm-match-btn').forEach(btn => {
       btn.addEventListener('click', e => {
@@ -421,6 +429,18 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const totalPossibleMatches = this._possibleMatches.size;
     const totalConfirmed = [...this._possibleMatches.values()].filter(v => v.confirmedIndex !== null).length;
 
+    // Phase 3 gate: all broken assets must have a confirmed match before applying.
+    const brokenWithoutConfirmed = allowedAssets.filter(a => {
+      if (!a.isBroken) return false;
+      const match = this._possibleMatches.get(a.originalPath);
+      return !match || match.confirmedIndex === null;
+    }).length;
+    const canApplyPaths = linkCheckDone && brokenWithoutConfirmed === 0 && !this._applyingPaths;
+
+    const applyDone = this._applyResults.size > 0;
+    const applySuccessCount = [...this._applyResults.values()].filter(v => v.status === 'success').length;
+    const applyErrorCount   = [...this._applyResults.values()].filter(v => v.status === 'error').length;
+
     return {
       tabs,
       activeTab: this._activeTab,
@@ -445,7 +465,12 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       copySuccessCount,
       copyErrorCount,
       copySkippedBrokenCount,
-      denyCount
+      denyCount,
+      applyingPaths: this._applyingPaths,
+      canApplyPaths,
+      applyDone,
+      applySuccessCount,
+      applyErrorCount
     };
   }
 
@@ -687,6 +712,107 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     );
 
     this._downloadCopyReport();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Apply path updates (Phase 3)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Builds a pathMap from resolved assets and applies updates to world documents.
+   * Shows an aggressive backup warning dialog before proceeding.
+   * @returns {Promise<void>}
+   */
+  async _onApplyPaths() {
+    if (this._applyingPaths) return;
+
+    const pathMap = new Map();
+
+    for (const asset of this._assets) {
+      // Case 1: broken asset with a confirmed match.
+      if (asset.isBroken) {
+        const match = this._possibleMatches.get(asset.originalPath);
+        if (match && match.confirmedIndex !== null) {
+          const confirmedPath = match.candidates[match.confirmedIndex]?.path;
+          if (confirmedPath) {
+            const docKey = (asset.isWildcard && asset.wildcardPath) ? asset.wildcardPath : asset.originalPath;
+            if (asset.isWildcard && asset.wildcardPath) {
+              pathMap.set(docKey, AssetUpdater.buildProposedWildcardFromConfirmed(asset.wildcardPath, confirmedPath));
+            } else {
+              pathMap.set(docKey, confirmedPath);
+            }
+          }
+        }
+        continue;
+      }
+
+      // Case 2: normal asset that was successfully copied.
+      const copyResult = this._copyResults.get(asset.originalPath);
+      if (copyResult?.status === 'success') {
+        const docKey = (asset.isWildcard && asset.wildcardPath) ? asset.wildcardPath : asset.originalPath;
+        if (asset.isWildcard && asset.wildcardPath) {
+          pathMap.set(docKey, AssetUpdater.buildProposedWildcardFromEntry(asset));
+        } else {
+          pathMap.set(docKey, asset.proposedPath);
+        }
+      }
+    }
+
+    if (pathMap.size === 0) {
+      ui.notifications.warn('Pack My World: Nothing to update. Copy files first, or confirm broken link replacements.');
+      return;
+    }
+
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: 'PACK MY WORLD — IRREVERSIBLE ACTION' },
+      position: { width: 560 },
+      content: `
+        <div style="border: 3px solid #c0392b; background: #2c0a0a; color: #f5c6cb; padding: 16px; border-radius: 6px; font-size: 14px; line-height: 1.6;">
+          <p style="font-size: 16px; font-weight: bold; color: #ff6b6b; margin-bottom: 12px;">
+            THIS ACTION IS IRREVERSIBLE
+          </p>
+          <p>This will overwrite the asset paths stored in <strong>every affected document</strong> in your world with the new paths pointing to <code>worlds/${game.world.id}/my-assets/</code>.</p>
+          <p style="margin-top: 10px;"><strong>If you have NOT made a backup of your world:</strong></p>
+          <ol style="margin: 8px 0 8px 20px;">
+            <li>Click <strong>Cancel</strong> below.</li>
+            <li>Close Foundry VTT completely.</li>
+            <li>Make a full backup of your world folder.</li>
+            <li>Reopen Foundry and run this step again.</li>
+          </ol>
+          <p style="margin-top: 10px; color: #ffcc00; font-weight: bold;">
+            Proceeding without a backup means you cannot undo this if something goes wrong.
+          </p>
+          <p style="margin-top: 10px;">
+            Only click <strong>I Have a Backup — Apply Changes</strong> if you are absolutely sure you have a working backup.
+          </p>
+        </div>
+      `,
+      yes: { label: 'I Have a Backup — Apply Changes', icon: 'fa-solid fa-triangle-exclamation' },
+      no:  { label: 'Cancel — I need to make a backup first' }
+    });
+
+    if (!confirmed) return;
+
+    this._applyingPaths = true;
+    this._applyResults.clear();
+    await this.render();
+
+    const { successCount, errorCount } = await AssetUpdater.applyAll(
+      this._assets,
+      pathMap,
+      (originalPath, status, error) => {
+        this._applyResults.set(originalPath, { status, error });
+      }
+    );
+
+    this._applyingPaths = false;
+    await this.render();
+
+    if (errorCount === 0) {
+      ui.notifications.info(`Pack My World: Paths updated successfully. ${successCount} path(s) changed.`);
+    } else {
+      ui.notifications.warn(`Pack My World: ${successCount} updated, ${errorCount} failed. Check the console for details.`);
+    }
   }
 
   /**

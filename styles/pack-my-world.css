@@ -88,6 +88,12 @@
 #pmw-fix-broken-btn:hover { background: #5a3500; color: #ffd870; }
 #pmw-fix-broken-btn.pmw-action-btn--disabled { background: #2a2a2a; color: #666; border-color: #444; }
 
+.pmw-action-btn--apply { background-color: #4a7c59; color: white; border-color: #2e5e3e; }
+.pmw-action-btn--apply:not(:disabled):hover { background-color: #2e5e3e; }
+.pmw-action-btn--apply.pmw-action-btn--disabled { background: #2a2a2a; color: #666; border-color: #444; }
+
+.pmw-apply-ok { color: #5cb85c; }
+
 /* ── Primary tabs ─────────────────────────────────────────────────── */
 .pmw-tabs { display: flex; gap: 3px; flex-wrap: wrap; }
 
