@@ -429,13 +429,8 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const totalPossibleMatches = this._possibleMatches.size;
     const totalConfirmed = [...this._possibleMatches.values()].filter(v => v.confirmedIndex !== null).length;
 
-    // Phase 3 gate: all broken assets must have a confirmed match before applying.
-    const brokenWithoutConfirmed = allowedAssets.filter(a => {
-      if (!a.isBroken) return false;
-      const match = this._possibleMatches.get(a.originalPath);
-      return !match || match.confirmedIndex === null;
-    }).length;
-    const canApplyPaths = linkCheckDone && brokenWithoutConfirmed === 0 && !this._applyingPaths;
+    // Phase 3 gate: link check must be done; broken assets without a confirmed match are skipped.
+    const canApplyPaths = linkCheckDone && !this._applyingPaths;
 
     const applyDone = this._applyResults.size > 0;
     const applySuccessCount = [...this._applyResults.values()].filter(v => v.status === 'success').length;
