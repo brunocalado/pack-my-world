@@ -431,3 +431,103 @@
 .pmw-error-text     { font-size: 0.68rem; color: #ff8080; font-family: monospace; word-break: break-all; flex: 1 1 auto; opacity: 0.85; }
 .pmw-tag--possible  { background: #2e2200; color: #f0c040; border: 1px solid #7a5000; }
 .pmw-tag--confirmed { background: #0d2e18; color: #50c878; border: 1px solid #1a5a30; }
+
+/* ── Current Path: read-only display row ─────────────────────────── */
+.pmw-path-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pmw-path-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pmw-path-edit-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--color-border, #666);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-text-muted, #aaa);
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.pmw-row:hover .pmw-path-edit-btn {
+  opacity: 1;
+}
+
+.pmw-path-edit-btn:hover {
+  background: var(--color-primary, #4f98a3);
+  color: #fff;
+  border-color: var(--color-primary, #4f98a3);
+}
+
+/* ── Inline edit form ────────────────────────────────────────────── */
+.pmw-path-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.pmw-path-edit-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-family: monospace;
+  border: 1px solid var(--color-primary, #4f98a3);
+  border-radius: 3px;
+  background: var(--color-bg, #1c1b19);
+  color: var(--color-text, #cdccca);
+  outline: none;
+}
+
+.pmw-path-edit-confirm-btn,
+.pmw-path-edit-cancel-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.pmw-path-edit-confirm-btn {
+  background: transparent;
+  border-color: var(--color-success, #6daa45);
+  color: var(--color-success, #6daa45);
+}
+.pmw-path-edit-confirm-btn:hover {
+  background: var(--color-success, #6daa45);
+  color: #fff;
+}
+
+.pmw-path-edit-cancel-btn {
+  background: transparent;
+  border-color: var(--color-error, #d163a7);
+  color: var(--color-error, #d163a7);
+}
+.pmw-path-edit-cancel-btn:hover {
+  background: var(--color-error, #d163a7);
+  color: #fff;
+}

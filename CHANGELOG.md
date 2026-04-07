@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### [Added]
+- Editable "Current Path" column: hover to reveal a pen icon, click to manually type a replacement path. Confirmed overrides feed into Apply Path Updates like auto-matched candidates.
 - Phase 3: "Apply Path Updates" button writes confirmed new paths back into world documents using `Document#update()`.
 - `AssetUpdater` engine handles all document types (scenes, actors, items, journals, playlists, macros, tables, compendiums) including embedded documents and wildcard token paths.
 - Mandatory backup warning dialog before applying irreversible path changes.

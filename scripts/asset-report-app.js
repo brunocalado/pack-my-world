@@ -145,6 +145,13 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
      * @type {number|null}
      */
     this._preserveScrollTop = null;
+
+    /**
+     * Tracks which asset is currently being edited and the draft path value.
+     * Only one row can be edited at a time.
+     * @type {{ originalPath: string, draftPath: string } | null}
+     */
+    this._editingPath = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -235,6 +242,58 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         const path = e.currentTarget.dataset.path;
         const type = e.currentTarget.dataset.type;
         this._onPreviewAsset(path, type);
+      });
+    });
+
+    // ---- Edit path button ----
+    this.element.querySelectorAll('.pmw-path-edit-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const original = e.currentTarget.dataset.original;
+        this._editingPath = { originalPath: original, draftPath: original };
+        this._saveScrollPosition();
+        this.render();
+      });
+    });
+
+    // ---- Confirm edit button ----
+    this.element.querySelectorAll('.pmw-path-edit-confirm-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const original = e.currentTarget.dataset.original;
+        const input = this.element.querySelector(
+          `.pmw-path-edit-input[data-original="${CSS.escape(original)}"]`
+        );
+        const newPath = input ? input.value.trim() : '';
+        this._commitPathEdit(original, newPath);
+      });
+    });
+
+    // ---- Cancel edit button ----
+    this.element.querySelectorAll('.pmw-path-edit-cancel-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._editingPath = null;
+        this._saveScrollPosition();
+        this.render();
+      });
+    });
+
+    // ---- Live-update draft as the user types (avoids losing value on render) ----
+    this.element.querySelectorAll('.pmw-path-edit-input').forEach(input => {
+      input.addEventListener('input', e => {
+        if (this._editingPath) {
+          this._editingPath.draftPath = e.currentTarget.value;
+        }
+      });
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const original = e.currentTarget.dataset.original;
+          this._commitPathEdit(original, e.currentTarget.value.trim());
+        }
+        if (e.key === 'Escape') {
+          this._editingPath = null;
+          this._saveScrollPosition();
+          this.render();
+        }
       });
     });
   }
@@ -398,7 +457,11 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         matchConfirmed: confirmed,
         confirmedPath,
         previewPath,
-        canOpenDocument: OPENABLE_TYPES.has(a.documentType)
+        canOpenDocument: OPENABLE_TYPES.has(a.documentType),
+        isEditing: this._editingPath?.originalPath === a.originalPath,
+        draftPath: this._editingPath?.originalPath === a.originalPath
+          ? this._editingPath.draftPath
+          : ''
       };
     });
 
@@ -494,6 +557,35 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
     if (doctype === 'scene') doc.view();
     else doc.sheet.render(true);
+  }
+
+  /**
+   * Commits a manually typed path override for a row.
+   * Stored in _possibleMatches with score 1.0 and confirmedIndex 0,
+   * matching the shape used by the automated candidate system so
+   * Apply Path Updates picks it up without changes to AssetUpdater.
+   *
+   * If the user clears the input (empty string), the override is removed.
+   *
+   * @param {string} originalPath  The asset's original (possibly broken) path
+   * @param {string} newPath       The manually entered replacement path
+   */
+  _commitPathEdit(originalPath, newPath) {
+    this._editingPath = null;
+
+    if (!newPath || newPath === originalPath) {
+      this._saveScrollPosition();
+      this.render();
+      return;
+    }
+
+    this._possibleMatches.set(originalPath, {
+      candidates: [{ path: newPath, score: 1.0, method: 'manual' }],
+      confirmedIndex: 0
+    });
+
+    this._saveScrollPosition();
+    this.render();
   }
 
   /**
