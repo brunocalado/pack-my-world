@@ -153,36 +153,20 @@
           </td>
           <td><span class="pmw-type pmw-type--{{type}}">{{type}}</span></td>
           <td class="pmw-path pmw-path--original">
-            {{#if isEditing}}
-              {{!-- Inline edit form --}}
-              <div class="pmw-path-edit-form">
-                <input
-                  class="pmw-path-edit-input"
-                  type="text"
-                  value="{{draftPath}}"
-                  data-original="{{originalPath}}"
-                  placeholder="Enter new path…"
-                  autofocus
-                />
-                <button class="pmw-path-edit-confirm-btn" data-original="{{originalPath}}" title="Confirm">
-                  <i class="fa-solid fa-check"></i>
-                </button>
-                <button class="pmw-path-edit-cancel-btn" data-original="{{originalPath}}" title="Cancel">
-                  <i class="fa-solid fa-xmark"></i>
-                </button>
-              </div>
-            {{else}}
-              {{!-- Read-only display with edit button --}}
-              <div class="pmw-path-display">
-                <span class="pmw-path-text" title="{{originalPath}}">{{originalPath}}</span>
-                {{#if isWildcard}}<span class="pmw-wildcard-badge" title="Resolved from wildcard: {{wildcardPath}}">&#x26A1; wildcard</span>{{/if}}
-                {{#unless isWildcard}}
-                <button class="pmw-path-edit-btn" data-original="{{originalPath}}" title="Override current path">
-                  <i class="fa-solid fa-pen-to-square"></i>
-                </button>
-                {{/unless}}
-              </div>
-            {{/if}}
+            <div class="pmw-path-display">
+              {{#unless isWildcard}}
+              <button
+                class="pmw-path-edit-btn {{#if hasManualOverride}}pmw-path-edit-btn--overridden{{/if}}"
+                data-original="{{originalPath}}"
+                data-assettype="{{type}}"
+                title="{{#if hasManualOverride}}Override active — click to change{{else}}Override current path{{/if}}"
+              >
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              {{/unless}}
+              <span class="pmw-path-text" title="{{originalPath}}">{{originalPath}}</span>
+              {{#if isWildcard}}<span class="pmw-wildcard-badge" title="Resolved from wildcard: {{wildcardPath}}">&#x26A1; wildcard</span>{{/if}}
+            </div>
           </td>
           <td class="pmw-path pmw-path--proposed" title="{{proposedPath}}">{{proposedPath}}</td>
           <td class="pmw-status">

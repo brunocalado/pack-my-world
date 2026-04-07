@@ -147,11 +147,11 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._preserveScrollTop = null;
 
     /**
-     * Tracks which asset is currently being edited and the draft path value.
-     * Only one row can be edited at a time.
-     * @type {{ originalPath: string, draftPath: string } | null}
+     * Tracks which originalPaths have an active manual override,
+     * so the template can apply the --overridden visual state to the edit button.
+     * @type {Set<string>}
      */
-    this._editingPath = null;
+    this._manualOverrides = new Set();
   }
 
   // ---------------------------------------------------------------------------
@@ -245,55 +245,30 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     });
 
-    // ---- Edit path button ----
+    // ---- Edit path button — opens FilePicker ----
     this.element.querySelectorAll('.pmw-path-edit-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         const original = e.currentTarget.dataset.original;
-        this._editingPath = { originalPath: original, draftPath: original };
-        this._saveScrollPosition();
-        this.render();
-      });
-    });
+        const assetType = e.currentTarget.dataset.assettype ?? 'any';
 
-    // ---- Confirm edit button ----
-    this.element.querySelectorAll('.pmw-path-edit-confirm-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        const original = e.currentTarget.dataset.original;
-        const input = this.element.querySelector(
-          `.pmw-path-edit-input[data-original="${CSS.escape(original)}"]`
-        );
-        const newPath = input ? input.value.trim() : '';
-        this._commitPathEdit(original, newPath);
-      });
-    });
+        // Map the module's type string to a FilePicker type
+        const fpType = assetType === 'image' ? 'image'
+          : assetType === 'audio' ? 'audio'
+          : assetType === 'video' ? 'video'
+          : 'any';
 
-    // ---- Cancel edit button ----
-    this.element.querySelectorAll('.pmw-path-edit-cancel-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this._editingPath = null;
-        this._saveScrollPosition();
-        this.render();
-      });
-    });
+        // Pre-navigate to the directory of the current path
+        const currentDir = original.includes('/')
+          ? original.substring(0, original.lastIndexOf('/'))
+          : '';
 
-    // ---- Live-update draft as the user types (avoids losing value on render) ----
-    this.element.querySelectorAll('.pmw-path-edit-input').forEach(input => {
-      input.addEventListener('input', e => {
-        if (this._editingPath) {
-          this._editingPath.draftPath = e.currentTarget.value;
-        }
-      });
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          const original = e.currentTarget.dataset.original;
-          this._commitPathEdit(original, e.currentTarget.value.trim());
-        }
-        if (e.key === 'Escape') {
-          this._editingPath = null;
-          this._saveScrollPosition();
-          this.render();
-        }
+        new foundry.applications.apps.FilePicker({
+          type: fpType,
+          current: currentDir,
+          callback: (selectedPath) => {
+            this._commitPathEdit(original, selectedPath);
+          }
+        }).render(true);
       });
     });
   }
@@ -458,10 +433,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
         confirmedPath,
         previewPath,
         canOpenDocument: OPENABLE_TYPES.has(a.documentType),
-        isEditing: this._editingPath?.originalPath === a.originalPath,
-        draftPath: this._editingPath?.originalPath === a.originalPath
-          ? this._editingPath.draftPath
-          : ''
+        hasManualOverride: this._manualOverrides.has(a.originalPath)
       };
     });
 
@@ -560,30 +532,25 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   /**
-   * Commits a manually typed path override for a row.
-   * Stored in _possibleMatches with score 1.0 and confirmedIndex 0,
-   * matching the shape used by the automated candidate system so
-   * Apply Path Updates picks it up without changes to AssetUpdater.
-   *
-   * If the user clears the input (empty string), the override is removed.
+   * Commits a manually selected path override for a row (chosen via FilePicker).
+   * Stores a synthetic candidate entry in _possibleMatches with score 1.0 and
+   * confirmedIndex 0 — the same shape used by the automated candidate system,
+   * so Apply Path Updates picks it up without changes to AssetUpdater.
+   * Also records the originalPath in _manualOverrides so the template can
+   * apply the visual override indicator on the edit button.
    *
    * @param {string} originalPath  The asset's original (possibly broken) path
-   * @param {string} newPath       The manually entered replacement path
+   * @param {string} newPath       The path selected in the FilePicker
    */
   _commitPathEdit(originalPath, newPath) {
-    this._editingPath = null;
-
-    if (!newPath || newPath === originalPath) {
-      this._saveScrollPosition();
-      this.render();
-      return;
-    }
+    if (!newPath || newPath === originalPath) return;
 
     this._possibleMatches.set(originalPath, {
       candidates: [{ path: newPath, score: 1.0, method: 'manual' }],
       confirmedIndex: 0
     });
 
+    this._manualOverrides.add(originalPath);
     this._saveScrollPosition();
     this.render();
   }
@@ -615,6 +582,7 @@ export class AssetReportApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._checkingLinks = true;
     for (const a of this._assets) a.isBroken = false;
     this._possibleMatches.clear();
+    this._manualOverrides.clear();
     this._fileIndex = null;
     this._stemIndex = null;
     this._tokenList = null;
